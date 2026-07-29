@@ -97,6 +97,10 @@ internal static class Program
         Contains("01:00 / 03:00", frame);
         Contains("Vol 70%", frame);
         Contains("Queue", frame);
+
+        state.Focus = FocusPane.Player;
+        frame = new TerminalFrameRenderer().Render(state, 100, 30);
+        Contains("● Now playing", frame);
         return Task.CompletedTask;
     }
 

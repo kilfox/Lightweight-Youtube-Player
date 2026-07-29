@@ -327,12 +327,14 @@ internal static class Program
             Keys:
               /                Focus search
               Tab / Shift+Tab  Change pane
+              Escape           Focus player controls
               Enter            Search or play selected track
               m                Load 10 more search results
               a                Add selected track to queue
               Delete           Remove selected queued track
               Space            Play/pause
               Left / Right     Seek backward/forward 5 seconds
+              Up / Down        Change volume while player is focused
               + / -            Change volume
               n / p            Next/previous queued track
               s                Stop

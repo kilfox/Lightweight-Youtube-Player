@@ -8,7 +8,8 @@ public enum FocusPane
     Results,
     Queue,
     History,
-    Favorites
+    Favorites,
+    Player
 }
 
 public sealed class AppState

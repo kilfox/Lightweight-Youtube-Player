@@ -149,7 +149,7 @@ Press `m` from outside the search field to load 10 more results. Additional batc
 
 Search results come from YouTube search. Adding terms such as `official audio`, an artist name, or an album name can improve the result order.
 
-While the search field is focused, normal characters—including `q`, `a`, and `h`—are added to the query. Press `Escape` or `Tab` to leave the search field.
+While the search field is focused, normal characters—including `q`, `a`, and `h`—are added to the query. Press `Escape` to focus the player or `Tab` to move to another section.
 
 ## 7. Use the queue
 
@@ -186,6 +186,7 @@ Press `f` on a selected or currently playing track to add or remove it from loca
 | Key | Action |
 | --- | --- |
 | `Space` | Pause or resume |
+| `Up` / `Down` | Raise or lower volume by 5% when the player is focused |
 | `Left` | Seek backward five seconds |
 | `Right` | Seek forward five seconds |
 | `+` or `=` | Increase volume by 5% |
@@ -204,6 +205,7 @@ The volume is saved when the program exits normally.
 | Key | Action |
 | --- | --- |
 | `/` | Focus the search field |
+| `Escape` | Focus the player controls from any section |
 | `Tab` | Focus the next pane |
 | `Shift+Tab` | Focus the previous pane |
 | `Up` / `Down` | Move within the focused list |

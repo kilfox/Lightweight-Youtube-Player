@@ -126,6 +126,7 @@ Run a muted end-to-end playback check and print the combined application/mpv wor
 | --- | --- |
 | `/` | Focus search |
 | `Tab` / `Shift+Tab` | Change pane |
+| `Escape` | Focus the player controls |
 | `Enter` | Search or play selected track |
 | `m` | Load 10 more search results, up to 50 |
 | `a` | Add selected result/history item to queue |
@@ -134,6 +135,7 @@ Run a muted end-to-end playback check and print the combined application/mpv wor
 | `Delete` | Remove selected queued track |
 | `Space` | Play or pause |
 | `Left` / `Right` | Seek backward/forward five seconds |
+| `Up` / `Down` | Change volume when the player is focused |
 | `+` / `-` | Change volume |
 | `n` / `p` | Next/previous queued track |
 | `x` | Toggle queue shuffle |
@@ -144,7 +146,7 @@ Run a muted end-to-end playback check and print the combined application/mpv wor
 | `?` | Show keyboard help |
 | `q` / `Ctrl+Q` | Quit |
 
-While the search field is focused, ordinary characters—including `q`—are entered into the query. Use `Escape` or `Tab` to leave it. `Ctrl+Q` always quits.
+While the search field is focused, ordinary characters—including `q`—are entered into the query. Use `Escape` to focus the player or `Tab` to move to another section. `Ctrl+Q` always quits.
 
 ## Data and configuration
 

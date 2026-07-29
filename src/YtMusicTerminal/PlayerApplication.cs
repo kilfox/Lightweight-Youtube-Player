@@ -258,11 +258,28 @@ public sealed class PlayerApplication : IAsyncDisposable
             case ConsoleKey.Tab:
                 CycleFocus(key.Modifiers.HasFlag(ConsoleModifiers.Shift) ? -1 : 1);
                 return true;
+            case ConsoleKey.Escape:
+                FocusPlayer();
+                return true;
             case ConsoleKey.UpArrow:
-                _state.MoveSelection(-1);
+                if (_state.Focus == FocusPane.Player)
+                {
+                    await ChangeVolumeAsync(5, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    _state.MoveSelection(-1);
+                }
                 return true;
             case ConsoleKey.DownArrow:
-                _state.MoveSelection(1);
+                if (_state.Focus == FocusPane.Player)
+                {
+                    await ChangeVolumeAsync(-5, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    _state.MoveSelection(1);
+                }
                 return true;
             case ConsoleKey.Enter:
                 BeginPlaySelected();
@@ -360,7 +377,7 @@ public sealed class PlayerApplication : IAsyncDisposable
         switch (key.Key)
         {
             case ConsoleKey.Escape:
-                _state.Focus = FocusPane.Results;
+                FocusPlayer();
                 return true;
             case ConsoleKey.Tab:
                 _state.Focus = key.Modifiers.HasFlag(ConsoleModifiers.Shift)
@@ -736,10 +753,17 @@ public sealed class PlayerApplication : IAsyncDisposable
             FocusPane.Search,
             FocusPane.Results,
             FocusPane.Queue,
-            _state.ShowFavorites ? FocusPane.Favorites : FocusPane.History
+            _state.ShowFavorites ? FocusPane.Favorites : FocusPane.History,
+            FocusPane.Player
         ];
         var current = Array.IndexOf(panes, _state.Focus);
         _state.Focus = panes[(current + direction + panes.Length) % panes.Length];
+    }
+
+    private void FocusPlayer()
+    {
+        _state.Focus = FocusPane.Player;
+        _state.StatusMessage = "Player focused. Up/Down changes volume.";
     }
 
     private void HandleStartupInput()

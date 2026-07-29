@@ -7,8 +7,8 @@
 | `/` | Focus the search field |
 | `Tab` | Move to the next section |
 | `Shift+Tab` | Move to the previous section |
-| `Up` / `Down` | Move through the focused list |
-| `Escape` | Leave the search field and focus results |
+| `Up` / `Down` | Move through a list, or change volume when the player is focused |
+| `Escape` | Focus the player controls from any section |
 
 ## Search and results
 
@@ -39,6 +39,7 @@ The first search returns 10 results. Leave the search field before using `m`; wh
 | Key | Action |
 | --- | --- |
 | `Space` | Pause or resume |
+| `Up` / `Down` | Raise or lower volume by 5% when the player is focused |
 | `Left` / `Right` | Seek backward or forward five seconds |
 | `+` / `-` | Raise or lower volume by 5% |
 | `s` | Stop playback |

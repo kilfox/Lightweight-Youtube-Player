@@ -19,6 +19,7 @@ public sealed class MpvClient : IAsyncDisposable
     private readonly object _snapshotLock = new();
 
     private Process? _process;
+    private WindowsProcessJob? _processJob;
     private NamedPipeClientStream? _pipe;
     private StreamReader? _reader;
     private StreamWriter? _writer;
@@ -144,17 +145,38 @@ public sealed class MpvClient : IAsyncDisposable
                     .Where(value => !string.IsNullOrWhiteSpace(value)));
         }
 
+        _processJob = OperatingSystem.IsWindows()
+            ? WindowsProcessJob.CreateKillOnClose()
+            : null;
         _process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+        var processStarted = false;
         try
         {
             if (!_process.Start())
             {
                 throw new InvalidOperationException("Could not start mpv.");
             }
+
+            processStarted = true;
+            _processJob?.AddProcess(_process);
         }
-        catch (System.ComponentModel.Win32Exception exception)
+        catch (System.ComponentModel.Win32Exception exception) when (!processStarted)
         {
+            TryKillProcess();
+            _process.Dispose();
+            _process = null;
+            _processJob?.Dispose();
+            _processJob = null;
             throw new FileNotFoundException("Could not start mpv.", _executable, exception);
+        }
+        catch
+        {
+            TryKillProcess();
+            _process.Dispose();
+            _process = null;
+            _processJob?.Dispose();
+            _processJob = null;
+            throw;
         }
 
         _pipe = new NamedPipeClientStream(
@@ -170,6 +192,8 @@ public sealed class MpvClient : IAsyncDisposable
         catch
         {
             TryKillProcess();
+            _processJob?.Dispose();
+            _processJob = null;
             throw;
         }
 
@@ -262,6 +286,8 @@ public sealed class MpvClient : IAsyncDisposable
         try
         {
             TryKillProcess();
+            _processJob?.Dispose();
+            _processJob = null;
             if (_readerTask is not null)
             {
                 try
@@ -634,6 +660,9 @@ public sealed class MpvClient : IAsyncDisposable
 
             _process.Dispose();
         }
+
+        _processJob?.Dispose();
+        _processJob = null;
 
         _writeLock.Dispose();
         _restartLock.Dispose();

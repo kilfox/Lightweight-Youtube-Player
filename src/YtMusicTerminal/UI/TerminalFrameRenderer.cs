@@ -110,12 +110,17 @@ public sealed class TerminalFrameRenderer
         }
 
         var modes = $"{(state.Shuffle ? "Shuffle on" : "Shuffle off")} | Repeat {state.Repeat.ToString().ToLowerInvariant()}";
-        canvas.Box(0, playerY, width, 5, $"Now playing  [{modes}]");
+        canvas.Box(
+            0,
+            playerY,
+            width,
+            5,
+            PaneTitle($"Now playing  [{modes}]", state.Focus == FocusPane.Player));
         DrawPlayer(canvas, state, playerY, width);
 
         var busy = state.IsSearching ? "Searching...  " : state.IsResolving ? "Loading track...  " : string.Empty;
         var help = state.ShowHelp
-            ? "Tab panes | Enter play | f favorite | x shuffle | r repeat | F5 resume | m more | Space pause | Ctrl+Q quit"
+            ? "Esc player | Up/Down volume | Tab panes | Enter play | m more | Space pause | Ctrl+Q quit"
             : "? help  |  Ctrl+Q quit  |  " + busy + state.StatusMessage;
         canvas.Write(0, height - 1, help, width);
         canvas.Style(0, height - 1, width, Dim);
