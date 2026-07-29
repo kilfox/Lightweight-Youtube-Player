@@ -51,10 +51,18 @@ If `dotnet` is not on `PATH`, set `YTMUSIC_DOTNET` to its full path and run:
 
 ## Install the global command
 
-After building, install the player for the current Windows user:
+After building, double-click `install.cmd`. It runs the installer with a process-only PowerShell execution-policy bypass and does not change the computer's permanent policy.
+
+Alternatively, install from PowerShell:
 
 ```powershell
 .\scripts\install.ps1
+```
+
+If PowerShell reports that script execution is disabled, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
 Open a new terminal and launch it from any directory:
@@ -77,6 +85,8 @@ lightytp update
 ```
 
 This installs the self-contained player and playback tools under `%LOCALAPPDATA%\Programs\LightYTP` and adds that directory to your user `PATH`. Administrator access is not required.
+
+GitHub's automatic **Source code ZIP** is for developers and does not include the executable or playback tools. End users should download the `LightYTP-win-x64.zip` asset from Releases.
 
 ## Build a standalone executable
 

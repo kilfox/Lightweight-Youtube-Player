@@ -42,10 +42,18 @@ To replace existing copies with current releases:
 
 ### Install the `lightytp` command
 
-After building the standalone version, install it for your Windows user:
+After downloading and extracting the Windows release, double-click `install.cmd`. This uses a process-only PowerShell execution-policy bypass without changing the permanent system policy.
+
+You can alternatively install it for your Windows user from PowerShell:
 
 ```powershell
 .\scripts\install.ps1
+```
+
+If script execution is disabled, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
 Open a new terminal, then start the player from any directory:
@@ -55,6 +63,8 @@ lightytp
 ```
 
 The installer copies the player and its tools to `%LOCALAPPDATA%\Programs\LightYTP` and adds that directory to your user `PATH`. It does not require administrator access.
+
+Do not use GitHub's automatic Source code ZIP unless you intend to build the project with the .NET SDK. End users need the `LightYTP-win-x64.zip` file from the Releases section.
 
 ### Run without installing
 
