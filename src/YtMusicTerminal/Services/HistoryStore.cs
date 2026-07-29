@@ -23,7 +23,10 @@ public sealed class HistoryStore(string filePath, int capacity = 100)
                 stream,
                 AppJsonContext.Default.ListHistoryEntry,
                 cancellationToken).ConfigureAwait(false);
-            return entries ?? [];
+            return (entries ?? [])
+                .DistinctBy(entry => entry.Track.Id, StringComparer.Ordinal)
+                .Take(capacity)
+                .ToArray();
         }
         finally
         {
@@ -52,6 +55,13 @@ public sealed class HistoryStore(string filePath, int capacity = 100)
                 entries = [];
             }
 
+            entries = entries
+                .DistinctBy(entry => entry.Track.Id, StringComparer.Ordinal)
+                .ToList();
+            entries.RemoveAll(entry => string.Equals(
+                entry.Track.Id,
+                track.Id,
+                StringComparison.Ordinal));
             entries.Insert(0, new HistoryEntry(track, DateTimeOffset.UtcNow));
             if (entries.Count > capacity)
             {
@@ -71,4 +81,3 @@ public sealed class HistoryStore(string filePath, int capacity = 100)
         }
     }
 }
-

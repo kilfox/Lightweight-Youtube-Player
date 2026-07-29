@@ -13,7 +13,7 @@ internal static class Program
             ("Parses yt-dlp search output", ParseSearchOutputAsync),
             ("Renders the terminal layout", RenderLayoutAsync),
             ("Formats playback duration", FormatDurationAsync),
-            ("Persists bounded history newest-first", HistoryStoreAsync),
+            ("Deduplicates bounded history newest-first", HistoryStoreAsync),
             ("Persists queue, favorites, and resume state", LibraryStoreAsync)
         };
         if (args.Contains("--live", StringComparer.Ordinal))
@@ -122,11 +122,13 @@ internal static class Program
             await store.AddAsync(first, CancellationToken.None).ConfigureAwait(false);
             await store.AddAsync(second, CancellationToken.None).ConfigureAwait(false);
             await store.AddAsync(third, CancellationToken.None).ConfigureAwait(false);
+            await store.AddAsync(second, CancellationToken.None).ConfigureAwait(false);
+            await store.AddAsync(second, CancellationToken.None).ConfigureAwait(false);
             var history = await store.LoadAsync(CancellationToken.None).ConfigureAwait(false);
 
             Equal(2, history.Count);
-            Equal("Third", history[0].Track.Title);
-            Equal("Second", history[1].Track.Title);
+            Equal("Second", history[0].Track.Title);
+            Equal("Third", history[1].Track.Title);
         }
         finally
         {
