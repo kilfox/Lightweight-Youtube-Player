@@ -13,8 +13,10 @@ public sealed class PlayerApplication : IAsyncDisposable
     private readonly AppSettings _initialSettings;
     private readonly SettingsStore _settingsStore;
     private readonly HistoryStore _historyStore;
+    private readonly LibraryStore _libraryStore;
     private readonly YtDlpClient _youtube;
     private readonly MpvClient _mpv;
+    private readonly string? _startupInput;
     private readonly AppState _state;
     private readonly TerminalFrameRenderer _renderer = new();
     private readonly Channel<AppEvent> _events = Channel.CreateUnbounded<AppEvent>(
@@ -26,8 +28,12 @@ public sealed class PlayerApplication : IAsyncDisposable
     private int _searchOperation;
     private int _searchResultLimit;
     private int _resolveOperation;
+    private int _directOperation;
     private int _lastWidth;
     private int _lastHeight;
+    private double _pendingResumeSeconds;
+    private double _resumePositionSeconds;
+    private Track? _lastPlayedTrack;
     private bool _exitRequested;
     private bool _disposed;
 
@@ -35,14 +41,18 @@ public sealed class PlayerApplication : IAsyncDisposable
         AppSettings settings,
         SettingsStore settingsStore,
         HistoryStore historyStore,
+        LibraryStore libraryStore,
         YtDlpClient youtube,
-        MpvClient mpv)
+        MpvClient mpv,
+        string? startupInput = null)
     {
         _initialSettings = settings;
         _settingsStore = settingsStore;
         _historyStore = historyStore;
+        _libraryStore = libraryStore;
         _youtube = youtube;
         _mpv = mpv;
+        _startupInput = startupInput;
         _state = new AppState { Playback = PlaybackSnapshot.Initial(settings.Volume) };
 
         _mpv.PlaybackEnded += OnPlaybackEnded;
@@ -61,10 +71,21 @@ public sealed class PlayerApplication : IAsyncDisposable
             try
             {
                 _state.History = await _historyStore.LoadAsync(token).ConfigureAwait(false);
+                var library = await _libraryStore.LoadAsync(token).ConfigureAwait(false);
+                _state.Queue.AddRange(library.Queue);
+                _state.Favorites.AddRange(library.Favorites);
+                _state.Shuffle = library.Shuffle;
+                _state.Repeat = library.Repeat;
+                _lastPlayedTrack = library.LastTrack;
+                _resumePositionSeconds = Math.Max(0, library.LastPositionSeconds);
+                if (_lastPlayedTrack is not null)
+                {
+                    _state.StatusMessage = $"Press F5 to resume {_lastPlayedTrack.Title}.";
+                }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
             {
-                _state.StatusMessage = $"History unavailable: {exception.Message}";
+                _state.StatusMessage = $"Local data unavailable: {exception.Message}";
             }
 
             await _mpv.StartAsync(token).ConfigureAwait(false);
@@ -74,6 +95,7 @@ public sealed class PlayerApplication : IAsyncDisposable
             terminal.Enter();
             StartInputLoop(token);
             StartTickLoop(token);
+            HandleStartupInput();
 
             var dirty = true;
             while (!_exitRequested && !token.IsCancellationRequested)
@@ -111,6 +133,16 @@ public sealed class PlayerApplication : IAsyncDisposable
             {
                 Console.Error.WriteLine($"Could not save settings: {exception.Message}");
             }
+
+            try
+            {
+                await _libraryStore.SaveAsync(CreateLibraryState(), CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Could not save library: {exception.Message}");
+            }
         }
     }
 
@@ -126,6 +158,10 @@ public sealed class PlayerApplication : IAsyncDisposable
                 if (snapshot != _state.Playback)
                 {
                     _state.Playback = snapshot;
+                    if (_state.NowPlaying is not null && snapshot.Position > TimeSpan.Zero)
+                    {
+                        _resumePositionSeconds = snapshot.Position.TotalSeconds;
+                    }
                     return true;
                 }
 
@@ -169,8 +205,18 @@ public sealed class PlayerApplication : IAsyncDisposable
                 }
 
                 return await StartPlaybackAsync(stream.Track, stream.Url, cancellationToken).ConfigureAwait(false);
+            case DirectTrackLoaded direct when direct.Operation == _directOperation:
+                if (direct.Track is null)
+                {
+                    _state.IsResolving = false;
+                    _state.StatusMessage = direct.Error ?? "Could not read the YouTube URL.";
+                    return true;
+                }
+
+                BeginResolve(direct.Track);
+                return true;
             case PlaybackEnded:
-                return BeginNextTrack();
+                return HandlePlaybackEnded();
             case PlaybackFailed playbackFailed:
                 _state.StatusMessage = playbackFailed.Message;
                 _state.Playback = _mpv.Snapshot;
@@ -186,6 +232,11 @@ public sealed class PlayerApplication : IAsyncDisposable
         {
             _exitRequested = true;
             return false;
+        }
+
+        if (key.Key == ConsoleKey.F5)
+        {
+            return ResumeLastTrack();
         }
 
         if (_state.ShowHelp)
@@ -250,7 +301,17 @@ public sealed class PlayerApplication : IAsyncDisposable
                 return true;
             case 'h':
             case 'H':
+                _state.ShowFavorites = false;
                 _state.Focus = FocusPane.History;
+                return true;
+            case 'v':
+            case 'V':
+                _state.ShowFavorites = true;
+                _state.Focus = FocusPane.Favorites;
+                return true;
+            case 'f':
+            case 'F':
+                ToggleFavorite();
                 return true;
             case 'm':
             case 'M':
@@ -262,6 +323,18 @@ public sealed class PlayerApplication : IAsyncDisposable
             case 'p':
             case 'P':
                 return BeginPreviousTrack();
+            case 'x':
+            case 'X':
+                _state.Shuffle = !_state.Shuffle;
+                _state.StatusMessage = $"Shuffle {(_state.Shuffle ? "enabled" : "disabled")}.";
+                return true;
+            case 'r':
+            case 'R':
+                CycleRepeatMode();
+                return true;
+            case 'c':
+            case 'C':
+                return ResumeLastTrack();
             case 's':
             case 'S':
                 await ExecutePlayerCommandAsync(
@@ -396,7 +469,7 @@ public sealed class PlayerApplication : IAsyncDisposable
         BeginResolve(track);
     }
 
-    private void BeginResolve(Track track)
+    private void BeginResolve(Track track, double resumePositionSeconds = 0)
     {
         _resolveCancellation?.Cancel();
         _resolveCancellation?.Dispose();
@@ -404,6 +477,7 @@ public sealed class PlayerApplication : IAsyncDisposable
         var operation = ++_resolveOperation;
         var token = _resolveCancellation.Token;
         _state.IsResolving = true;
+        _pendingResumeSeconds = Math.Max(0, resumePositionSeconds);
         _state.NowPlaying = track;
         _state.Playback = _state.Playback with
         {
@@ -439,7 +513,16 @@ public sealed class PlayerApplication : IAsyncDisposable
         try
         {
             await _mpv.LoadAsync(url, cancellationToken).ConfigureAwait(false);
+            var resumePosition = _pendingResumeSeconds;
+            if (resumePosition > 0)
+            {
+                await WaitForPlaybackStartAsync(cancellationToken).ConfigureAwait(false);
+                await _mpv.SeekToAsync(resumePosition, cancellationToken).ConfigureAwait(false);
+            }
+            _pendingResumeSeconds = 0;
+            _resumePositionSeconds = resumePosition;
             _state.NowPlaying = track;
+            _lastPlayedTrack = track;
             _state.Playback = _mpv.Snapshot;
             _state.StatusMessage = $"Playing {track.Title}.";
         }
@@ -467,6 +550,20 @@ public sealed class PlayerApplication : IAsyncDisposable
         return true;
     }
 
+    private async Task WaitForPlaybackStartAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (_mpv.Snapshot.State is PlaybackState.Idle or PlaybackState.Loading)
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new InvalidOperationException("Timed out while preparing the track for resume.");
+            }
+
+            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private void AddSelectedToQueue()
     {
         var track = _state.SelectedTrack;
@@ -479,6 +576,65 @@ public sealed class PlayerApplication : IAsyncDisposable
         _state.Queue.Add(track);
         _state.SelectedQueueItem = _state.Queue.Count - 1;
         _state.StatusMessage = $"Queued {track.Title}.";
+    }
+
+    private void ToggleFavorite()
+    {
+        var track = _state.SelectedTrack ?? _state.NowPlaying;
+        if (track is null)
+        {
+            _state.StatusMessage = "Select or play a track first.";
+            return;
+        }
+
+        var existing = _state.Favorites.FindIndex(item => item.Id == track.Id);
+        if (existing >= 0)
+        {
+            _state.Favorites.RemoveAt(existing);
+            _state.ClampSelections();
+            _state.StatusMessage = $"Removed {track.Title} from favorites.";
+        }
+        else
+        {
+            _state.Favorites.Insert(0, track);
+            _state.SelectedFavorite = 0;
+            _state.StatusMessage = $"Added {track.Title} to favorites.";
+        }
+    }
+
+    private void CycleRepeatMode()
+    {
+        _state.Repeat = _state.Repeat switch
+        {
+            RepeatMode.Off => RepeatMode.Track,
+            RepeatMode.Track => RepeatMode.Queue,
+            _ => RepeatMode.Off
+        };
+        _state.StatusMessage = $"Repeat {_state.Repeat.ToString().ToLowerInvariant()}.";
+    }
+
+    private bool ResumeLastTrack()
+    {
+        if (_lastPlayedTrack is null)
+        {
+            _state.StatusMessage = "There is no saved track to resume.";
+            return true;
+        }
+
+        BeginResolve(_lastPlayedTrack, _resumePositionSeconds);
+        return true;
+    }
+
+    private bool HandlePlaybackEnded()
+    {
+        _resumePositionSeconds = 0;
+        if (_state.Repeat == RepeatMode.Track && _state.NowPlaying is not null)
+        {
+            BeginResolve(_state.NowPlaying);
+            return true;
+        }
+
+        return BeginNextTrack();
     }
 
     private void RemoveSelectedQueueItem()
@@ -512,11 +668,23 @@ public sealed class PlayerApplication : IAsyncDisposable
             return true;
         }
 
-        var next = _state.CurrentQueueItem < 0 ? 0 : _state.CurrentQueueItem + 1;
+        var candidates = Enumerable.Range(0, _state.Queue.Count)
+            .Where(index => index != _state.CurrentQueueItem)
+            .ToArray();
+        var next = _state.Shuffle && candidates.Length > 0
+            ? candidates[Random.Shared.Next(candidates.Length)]
+            : _state.CurrentQueueItem < 0 ? 0 : _state.CurrentQueueItem + 1;
         if (next >= _state.Queue.Count)
         {
-            _state.StatusMessage = "Reached the end of the queue.";
-            return true;
+            if (_state.Repeat == RepeatMode.Queue)
+            {
+                next = 0;
+            }
+            else
+            {
+                _state.StatusMessage = "Reached the end of the queue.";
+                return true;
+            }
         }
 
         _state.CurrentQueueItem = next;
@@ -563,10 +731,68 @@ public sealed class PlayerApplication : IAsyncDisposable
 
     private void CycleFocus(int direction)
     {
-        FocusPane[] panes = [FocusPane.Search, FocusPane.Results, FocusPane.Queue, FocusPane.History];
+        FocusPane[] panes =
+        [
+            FocusPane.Search,
+            FocusPane.Results,
+            FocusPane.Queue,
+            _state.ShowFavorites ? FocusPane.Favorites : FocusPane.History
+        ];
         var current = Array.IndexOf(panes, _state.Focus);
         _state.Focus = panes[(current + direction + panes.Length) % panes.Length];
     }
+
+    private void HandleStartupInput()
+    {
+        var input = _startupInput?.Trim();
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return;
+        }
+
+        if (Uri.TryCreate(input, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+        {
+            BeginDirectUrl(input);
+            return;
+        }
+
+        _state.SearchText = input;
+        BeginSearch();
+    }
+
+    private void BeginDirectUrl(string url)
+    {
+        var operation = ++_directOperation;
+        var token = _shutdown.Token;
+        _state.IsResolving = true;
+        _state.StatusMessage = "Reading YouTube track information...";
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var track = await _youtube.GetTrackAsync(url, token).ConfigureAwait(false);
+                _events.Writer.TryWrite(new DirectTrackLoaded(operation, track, null));
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+            }
+            catch (Exception exception)
+            {
+                _events.Writer.TryWrite(new DirectTrackLoaded(operation, null, exception.Message));
+            }
+        }, CancellationToken.None);
+    }
+
+    private LibraryState CreateLibraryState() => new()
+    {
+        Queue = [.. _state.Queue],
+        Favorites = [.. _state.Favorites],
+        LastTrack = _lastPlayedTrack,
+        LastPositionSeconds = Math.Max(0, _resumePositionSeconds),
+        Shuffle = _state.Shuffle,
+        Repeat = _state.Repeat
+    };
 
     private void StartInputLoop(CancellationToken cancellationToken)
     {
@@ -665,6 +891,11 @@ public sealed class PlayerApplication : IAsyncDisposable
         int Operation,
         Track Track,
         string? Url,
+        string? Error) : AppEvent;
+
+    private sealed record DirectTrackLoaded(
+        int Operation,
+        Track? Track,
         string? Error) : AppEvent;
 
     private sealed record PlaybackEnded : AppEvent;

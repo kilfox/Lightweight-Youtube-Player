@@ -50,6 +50,11 @@ internal static class Program
             return 0;
         }
 
+        if (options.UpdateTools)
+        {
+            return await UpdateToolsAsync().ConfigureAwait(false);
+        }
+
         var appPaths = AppPaths.CreateDefault();
         var settingsStore = new SettingsStore(appPaths.SettingsFile);
         AppSettings settings;
@@ -106,6 +111,7 @@ internal static class Program
         var processRunner = new ProcessRunner();
         var youtube = new YtDlpClient(ytDlpPath, processRunner);
         var history = new HistoryStore(appPaths.HistoryFile);
+        var library = new LibraryStore(appPaths.LibraryFile);
         var mpv = new MpvClient(
             mpvPath,
             settings.Volume,
@@ -117,8 +123,10 @@ internal static class Program
                 settings,
                 settingsStore,
                 history,
+                library,
                 youtube,
-                mpv);
+                mpv,
+                options.StartupInput);
             await application.RunAsync(cancellation.Token).ConfigureAwait(false);
             return 0;
         }
@@ -246,6 +254,54 @@ internal static class Program
         Console.Error.WriteLine("  ytmusic --yt-dlp C:\\path\\yt-dlp.exe --mpv C:\\path\\mpv.exe");
     }
 
+    private static async Task<int> UpdateToolsAsync()
+    {
+        var installedScript = Path.Combine(AppContext.BaseDirectory, "update-tools.ps1");
+        var sourceScript = Path.Combine(Environment.CurrentDirectory, "scripts", "bootstrap-tools.ps1");
+        var script = File.Exists(installedScript) ? installedScript : sourceScript;
+        if (!File.Exists(script))
+        {
+            Console.Error.WriteLine("The tool update script was not found. Reinstall LightYTP first.");
+            return 2;
+        }
+
+        var installedTools = Path.Combine(AppContext.BaseDirectory, "tools");
+        var toolsDirectory = Directory.Exists(installedTools)
+            ? installedTools
+            : Path.Combine(Environment.CurrentDirectory, "tools");
+        var powershell = ToolLocator.Find("powershell.exe", null, "LIGHTYTP_POWERSHELL")
+            ?? ToolLocator.Find("pwsh.exe", null, "LIGHTYTP_POWERSHELL");
+        if (powershell is null)
+        {
+            Console.Error.WriteLine("PowerShell is required to update playback tools.");
+            return 2;
+        }
+
+        Console.WriteLine("Updating yt-dlp, mpv, and Deno...");
+        var result = await new ProcessRunner().RunAsync(
+            powershell,
+            [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", script,
+                "-ToolsDirectory", toolsDirectory,
+                "-Force"
+            ],
+            Path.GetDirectoryName(script),
+            null,
+            TimeSpan.FromMinutes(5),
+            CancellationToken.None).ConfigureAwait(false);
+        Console.Write(result.StandardOutput);
+        if (result.ExitCode != 0)
+        {
+            Console.Error.Write(result.StandardError);
+            return result.ExitCode;
+        }
+
+        Console.WriteLine("Playback tools updated successfully.");
+        return 0;
+    }
+
     private static void PrintHelp()
     {
         Console.WriteLine(
@@ -253,13 +309,14 @@ internal static class Program
             ytmusic - lightweight terminal YouTube music player
 
             Usage:
-              ytmusic [options]
+              ytmusic [options] [search query or YouTube URL]
 
             Options:
               --yt-dlp <path>  Path to yt-dlp executable
               --mpv <path>     Path to mpv executable
               --diagnose       Print dependency versions and paths
               --smoke-test     Search and start muted playback, then print memory use
+              update           Update yt-dlp, mpv, and Deno, then exit
               --version        Print application version
               -h, --help       Show this help
 
@@ -280,6 +337,11 @@ internal static class Program
               n / p            Next/previous queued track
               s                Stop
               h                Focus history
+              v                Focus favorites
+              f                Add/remove favorite
+              x                Toggle queue shuffle
+              r                Cycle repeat mode
+              F5               Resume last track
               ?                Show keyboard help
               q / Ctrl+Q       Quit
             """);
@@ -296,8 +358,10 @@ internal static class Program
         bool ShowVersion,
         bool Diagnose,
         bool SmokeTest,
+        bool UpdateTools,
         string? YtDlpPath,
-        string? MpvPath)
+        string? MpvPath,
+        string? StartupInput)
     {
         public static CliOptions Parse(IReadOnlyList<string> args)
         {
@@ -305,8 +369,10 @@ internal static class Program
             var version = false;
             var diagnose = false;
             var smokeTest = false;
+            var updateTools = false;
             string? ytDlp = null;
             string? mpv = null;
+            var startupInput = new List<string>();
 
             for (var index = 0; index < args.Count; index++)
             {
@@ -325,6 +391,9 @@ internal static class Program
                     case "--smoke-test":
                         smokeTest = true;
                         break;
+                    case "update":
+                        updateTools = true;
+                        break;
                     case "--yt-dlp":
                         ytDlp = ReadValue(args, ref index, "--yt-dlp");
                         break;
@@ -332,11 +401,25 @@ internal static class Program
                         mpv = ReadValue(args, ref index, "--mpv");
                         break;
                     default:
-                        throw new ArgumentException($"Unknown option '{args[index]}'.");
+                        if (args[index].StartsWith('-'))
+                        {
+                            throw new ArgumentException($"Unknown option '{args[index]}'.");
+                        }
+
+                        startupInput.Add(args[index]);
+                        break;
                 }
             }
 
-            return new CliOptions(help, version, diagnose, smokeTest, ytDlp, mpv);
+            return new CliOptions(
+                help,
+                version,
+                diagnose,
+                smokeTest,
+                updateTools,
+                ytDlp,
+                mpv,
+                startupInput.Count == 0 ? null : string.Join(' ', startupInput));
         }
 
         private static string ReadValue(IReadOnlyList<string> args, ref int index, string option)

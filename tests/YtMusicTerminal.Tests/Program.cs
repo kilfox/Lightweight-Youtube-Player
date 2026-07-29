@@ -13,7 +13,8 @@ internal static class Program
             ("Parses yt-dlp search output", ParseSearchOutputAsync),
             ("Renders the terminal layout", RenderLayoutAsync),
             ("Formats playback duration", FormatDurationAsync),
-            ("Persists bounded history newest-first", HistoryStoreAsync)
+            ("Persists bounded history newest-first", HistoryStoreAsync),
+            ("Persists queue, favorites, and resume state", LibraryStoreAsync)
         };
         if (args.Contains("--live", StringComparer.Ordinal))
         {
@@ -177,6 +178,40 @@ internal static class Program
         }
 
         await mpv.StopAsync(timeout.Token).ConfigureAwait(false);
+    }
+
+    private static async Task LibraryStoreAsync()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"ytmusic-library-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var track = new Track("id", "Song", "Artist", TimeSpan.FromMinutes(3), "https://youtube.com/watch?v=id");
+            var store = new LibraryStore(Path.Combine(directory, "library.json"));
+            await store.SaveAsync(
+                new LibraryState
+                {
+                    Queue = [track],
+                    Favorites = [track],
+                    LastTrack = track,
+                    LastPositionSeconds = 42,
+                    Shuffle = true,
+                    Repeat = RepeatMode.Queue
+                },
+                CancellationToken.None).ConfigureAwait(false);
+
+            var restored = await store.LoadAsync(CancellationToken.None).ConfigureAwait(false);
+            Equal(1, restored.Queue.Count);
+            Equal(1, restored.Favorites.Count);
+            Equal("id", restored.LastTrack?.Id);
+            Equal(42d, restored.LastPositionSeconds);
+            Equal(true, restored.Shuffle);
+            Equal(RepeatMode.Queue, restored.Repeat);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static void Equal<T>(T expected, T actual)

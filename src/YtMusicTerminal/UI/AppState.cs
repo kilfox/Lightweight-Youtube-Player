@@ -7,7 +7,8 @@ public enum FocusPane
     Search,
     Results,
     Queue,
-    History
+    History,
+    Favorites
 }
 
 public sealed class AppState
@@ -20,11 +21,15 @@ public sealed class AppState
 
     public IReadOnlyList<HistoryEntry> History { get; set; } = [];
 
+    public List<Track> Favorites { get; } = [];
+
     public int SelectedResult { get; set; }
 
     public int SelectedQueueItem { get; set; }
 
     public int SelectedHistoryItem { get; set; }
+
+    public int SelectedFavorite { get; set; }
 
     public int CurrentQueueItem { get; set; } = -1;
 
@@ -42,11 +47,18 @@ public sealed class AppState
 
     public bool ShowHelp { get; set; }
 
+    public bool ShowFavorites { get; set; }
+
+    public bool Shuffle { get; set; }
+
+    public RepeatMode Repeat { get; set; }
+
     public Track? SelectedTrack => Focus switch
     {
         FocusPane.Results => ItemAt(SearchResults, SelectedResult),
         FocusPane.Queue => ItemAt(Queue, SelectedQueueItem),
         FocusPane.History => ItemAt(History, SelectedHistoryItem)?.Track,
+        FocusPane.Favorites => ItemAt(Favorites, SelectedFavorite),
         _ => null
     };
 
@@ -63,6 +75,9 @@ public sealed class AppState
             case FocusPane.History:
                 SelectedHistoryItem = Move(SelectedHistoryItem, delta, History.Count);
                 break;
+            case FocusPane.Favorites:
+                SelectedFavorite = Move(SelectedFavorite, delta, Favorites.Count);
+                break;
         }
     }
 
@@ -71,6 +86,7 @@ public sealed class AppState
         SelectedResult = Move(SelectedResult, 0, SearchResults.Count);
         SelectedQueueItem = Move(SelectedQueueItem, 0, Queue.Count);
         SelectedHistoryItem = Move(SelectedHistoryItem, 0, History.Count);
+        SelectedFavorite = Move(SelectedFavorite, 0, Favorites.Count);
     }
 
     private static int Move(int current, int delta, int count) =>
@@ -79,4 +95,3 @@ public sealed class AppState
     private static T? ItemAt<T>(IReadOnlyList<T> items, int index) where T : class =>
         index >= 0 && index < items.Count ? items[index] : null;
 }
-

@@ -226,6 +226,14 @@ public sealed class MpvClient : IAsyncDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task SeekToAsync(double seconds, CancellationToken cancellationToken)
+    {
+        var safeSeconds = double.IsFinite(seconds) ? Math.Max(0, seconds) : 0;
+        await SendCommandAsync(
+            ["seek", safeSeconds, "absolute+exact"],
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task SetVolumeAsync(int volume, CancellationToken cancellationToken)
     {
         var safeVolume = Math.Clamp(volume, 0, 100);
@@ -516,6 +524,9 @@ public sealed class MpvClient : IAsyncDisposable
                 writer.WriteNumberValue(number);
                 break;
             case long number:
+                writer.WriteNumberValue(number);
+                break;
+            case double number:
                 writer.WriteNumberValue(number);
                 break;
             case bool boolean:

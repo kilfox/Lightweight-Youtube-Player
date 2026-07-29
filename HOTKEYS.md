@@ -17,6 +17,8 @@
 | `Enter` | Search from the search field or play the selected result |
 | `m` | Load 10 more search results, up to 50 |
 | `a` | Add the selected result or history item to the queue |
+| `f` | Add or remove the selected track from favorites |
+| `v` | Show and focus favorites |
 
 The first search returns 10 results. Leave the search field before using `m`; while the search field is focused, letters are entered as search text.
 
@@ -29,6 +31,8 @@ The first search returns 10 results. Leave the search field before using `m`; wh
 | `n` | Play the next queued track |
 | `p` | Play the previous queued track |
 | `h` | Focus playback history |
+| `x` | Toggle queue shuffle |
+| `r` | Cycle repeat off, track, and queue |
 
 ## Playback
 
@@ -38,6 +42,7 @@ The first search returns 10 results. Leave the search field before using `m`; wh
 | `Left` / `Right` | Seek backward or forward five seconds |
 | `+` / `-` | Raise or lower volume by 5% |
 | `s` | Stop playback |
+| `F5` | Resume the last track from its saved position |
 
 ## Application
 

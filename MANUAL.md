@@ -10,7 +10,7 @@ Three processes are involved:
 - `yt-dlp.exe` runs temporarily during searches and track loading, then exits.
 - `mpv.exe` remains open while the application is running and handles audio playback.
 
-The program streams audio directly. It does not download songs for offline use.
+The program streams audio directly. It does not download songs for offline use. It selects the best available audio format by default.
 
 ## 2. Requirements
 
@@ -74,6 +74,19 @@ You can also run from source when the .NET 10 SDK is installed:
 
 ```powershell
 .\scripts\run.ps1
+```
+
+Start with a search query or YouTube URL directly:
+
+```powershell
+lightytp "Daft Punk Get Lucky"
+lightytp "https://www.youtube.com/watch?v=..."
+```
+
+Manually update the bundled playback tools:
+
+```powershell
+lightytp update
 ```
 
 ### Configure permanent tool paths
@@ -140,7 +153,9 @@ Queue controls:
 - `Delete`: remove the selected queue entry.
 - `Up` / `Down`: change the selected queue entry.
 
-When a queued track finishes normally, the next entry starts automatically. The queue exists for the current session and is not restored after quitting.
+When a queued track finishes normally, the next entry starts automatically. The queue is saved locally and restored the next time LightYTP starts.
+
+Press `x` to toggle shuffle. Press `r` to cycle between repeat off, repeat track, and repeat queue.
 
 ## 8. Use playback history
 
@@ -154,6 +169,8 @@ From history you can:
 
 The most recent entry appears first. History is limited to 100 entries and persists between sessions.
 
+Press `f` on a selected or currently playing track to add or remove it from local favorites. Press `v` to show favorites and `h` to return to history.
+
 ## 9. Playback controls
 
 | Key | Action |
@@ -166,6 +183,9 @@ The most recent entry appears first. History is limited to 100 entries and persi
 | `n` | Next queued track |
 | `p` | Previous queued track |
 | `s` | Stop playback |
+| `x` | Toggle queue shuffle |
+| `r` | Cycle repeat mode |
+| `F5` | Resume the last track and saved position |
 
 The volume is saved when the program exits normally.
 
@@ -180,6 +200,8 @@ The volume is saved when the program exits normally.
 | `Enter` | Search or play the selected track |
 | `m` | Load 10 more search results, up to 50 |
 | `a` | Add the selected track to the queue |
+| `f` | Add or remove a favorite |
+| `v` | Focus favorites |
 | `Delete` | Remove the selected queue entry |
 | `h` | Focus history |
 | `?` | Show the keyboard help line |
@@ -218,6 +240,7 @@ Files in this directory include:
 
 - `settings.json`: saved volume and configured tool paths.
 - `history.json`: the last 100 played tracks.
+- `library.json`: queue, favorites, shuffle/repeat state, and resume position.
 - `mpv.log`: detailed playback-engine diagnostics.
 
 The initial version does not read browser profiles, browser cookies, passwords, or YouTube account credentials.

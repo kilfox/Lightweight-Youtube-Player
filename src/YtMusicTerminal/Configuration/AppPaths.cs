@@ -1,6 +1,10 @@
 namespace YtMusicTerminal.Configuration;
 
-public sealed record AppPaths(string DataDirectory, string SettingsFile, string HistoryFile)
+public sealed record AppPaths(
+    string DataDirectory,
+    string SettingsFile,
+    string HistoryFile,
+    string LibraryFile)
 {
     public static AppPaths CreateDefault()
     {
@@ -14,7 +18,7 @@ public sealed record AppPaths(string DataDirectory, string SettingsFile, string 
         return new AppPaths(
             directory,
             Path.Combine(directory, "settings.json"),
-            Path.Combine(directory, "history.json"));
+            Path.Combine(directory, "history.json"),
+            Path.Combine(directory, "library.json"));
     }
 }
-

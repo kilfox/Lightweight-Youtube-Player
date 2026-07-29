@@ -70,28 +70,52 @@ public sealed class TerminalFrameRenderer
             queueHeight - 2,
             state.NowPlaying);
 
-        canvas.Box(
-            leftWidth,
-            mainY + queueHeight,
-            rightWidth,
-            historyHeight,
-            PaneTitle("History  [h]", state.Focus == FocusPane.History));
-        DrawHistory(
-            canvas,
-            state.History,
-            state.SelectedHistoryItem,
-            state.Focus == FocusPane.History,
-            leftWidth + 1,
-            mainY + queueHeight + 1,
-            rightWidth - 2,
-            historyHeight - 2);
+        var libraryY = mainY + queueHeight;
+        if (state.ShowFavorites)
+        {
+            canvas.Box(
+                leftWidth,
+                libraryY,
+                rightWidth,
+                historyHeight,
+                PaneTitle("Favorites  [v]", state.Focus == FocusPane.Favorites));
+            DrawTracks(
+                canvas,
+                state.Favorites,
+                state.SelectedFavorite,
+                state.Focus == FocusPane.Favorites,
+                leftWidth + 1,
+                libraryY + 1,
+                rightWidth - 2,
+                historyHeight - 2,
+                state.NowPlaying);
+        }
+        else
+        {
+            canvas.Box(
+                leftWidth,
+                libraryY,
+                rightWidth,
+                historyHeight,
+                PaneTitle("History  [h]", state.Focus == FocusPane.History));
+            DrawHistory(
+                canvas,
+                state.History,
+                state.SelectedHistoryItem,
+                state.Focus == FocusPane.History,
+                leftWidth + 1,
+                libraryY + 1,
+                rightWidth - 2,
+                historyHeight - 2);
+        }
 
-        canvas.Box(0, playerY, width, 5, "Now playing");
+        var modes = $"{(state.Shuffle ? "Shuffle on" : "Shuffle off")} | Repeat {state.Repeat.ToString().ToLowerInvariant()}";
+        canvas.Box(0, playerY, width, 5, $"Now playing  [{modes}]");
         DrawPlayer(canvas, state, playerY, width);
 
         var busy = state.IsSearching ? "Searching...  " : state.IsResolving ? "Loading track...  " : string.Empty;
         var help = state.ShowHelp
-            ? "Tab panes | Enter play | m more | a queue | Space pause | ←/→ seek | +/- volume | n/p next/prev | s stop | Ctrl+Q quit"
+            ? "Tab panes | Enter play | f favorite | x shuffle | r repeat | F5 resume | m more | Space pause | Ctrl+Q quit"
             : "? help  |  Ctrl+Q quit  |  " + busy + state.StatusMessage;
         canvas.Write(0, height - 1, help, width);
         canvas.Style(0, height - 1, width, Dim);

@@ -14,6 +14,11 @@ The initial player supports:
 - An in-session queue with next/previous navigation
 - Automatic queue advancement
 - Local playback history
+- Persistent queue and local favorites
+- Shuffle, track repeat, and queue repeat
+- Resume the last track and playback position
+- Direct startup from a search query or YouTube URL
+- Manual playback-tool updates
 - Event-driven terminal rendering
 - Clean mpv and yt-dlp process shutdown
 - Trimmed, self-contained single-file publishing for Windows x64
@@ -56,6 +61,19 @@ Open a new terminal and launch it from any directory:
 
 ```powershell
 lightytp
+```
+
+Start with a search or URL directly:
+
+```powershell
+lightytp "Daft Punk Get Lucky"
+lightytp "https://www.youtube.com/watch?v=..."
+```
+
+Update yt-dlp, mpv, and Deno only when requested:
+
+```powershell
+lightytp update
 ```
 
 This installs the self-contained player and playback tools under `%LOCALAPPDATA%\Programs\LightYTP` and adds that directory to your user `PATH`. Administrator access is not required.
@@ -101,11 +119,16 @@ Run a muted end-to-end playback check and print the combined application/mpv wor
 | `Enter` | Search or play selected track |
 | `m` | Load 10 more search results, up to 50 |
 | `a` | Add selected result/history item to queue |
+| `f` | Add or remove the selected track from favorites |
+| `v` | Focus favorites |
 | `Delete` | Remove selected queued track |
 | `Space` | Play or pause |
 | `Left` / `Right` | Seek backward/forward five seconds |
 | `+` / `-` | Change volume |
 | `n` / `p` | Next/previous queued track |
+| `x` | Toggle queue shuffle |
+| `r` | Cycle repeat off, track, and queue |
+| `F5` | Resume the last track and position |
 | `s` | Stop |
 | `h` | Focus history |
 | `?` | Show keyboard help |
@@ -121,7 +144,7 @@ Settings and history are stored under:
 %LOCALAPPDATA%\YtMusicTerminal
 ```
 
-mpv diagnostic output is written to `mpv.log` in that directory. If mpv's IPC connection closes while a track is loading, the player restarts mpv once and retries automatically.
+Queue, favorites, playback modes, and resume state are stored in `library.json`. mpv diagnostic output is written to `mpv.log`. If mpv's IPC connection closes while a track is loading, the player restarts mpv once and retries automatically.
 
 Tool paths can also be supplied through `YTMUSIC_YTDLP` and `YTMUSIC_MPV`.
 
@@ -130,6 +153,7 @@ Tool paths can also be supplied through `YTMUSIC_YTDLP` and `YTMUSIC_MPV`.
 - No browser engine, Electron, WebView, or graphical UI toolkit
 - No video decoding or video window
 - No audio downloads or transcoding
+- Best available audio is selected by default
 - Bounded 4 MiB mpv forward cache and 512 KiB back-cache
 - yt-dlp exits immediately after each search or stream resolution
 - The terminal redraws only for input, state changes, terminal resizing, and playback progress

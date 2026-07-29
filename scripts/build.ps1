@@ -59,6 +59,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') -Destination $output -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'THIRD_PARTY_NOTICES.md') -Destination $output -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts\install.ps1') -Destination $output -Force
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts\bootstrap-tools.ps1') -Destination (Join-Path $output 'update-tools.ps1') -Force
 
     $sourceTools = Join-Path $repositoryRoot 'tools'
     $outputTools = Join-Path $output 'tools'

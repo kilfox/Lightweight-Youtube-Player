@@ -42,6 +42,11 @@ foreach ($documentName in @('README.md', 'MANUAL.md', 'HOTKEYS.md', 'LICENSE', '
     }
 }
 
+$updateScript = Join-Path $sourceDirectory 'update-tools.ps1'
+if (Test-Path -LiteralPath $updateScript) {
+    Copy-Item -LiteralPath $updateScript -Destination $resolvedInstallDirectory -Force
+}
+
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $pathEntries = @($userPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $alreadyOnPath = $pathEntries | Where-Object {

@@ -60,7 +60,20 @@ function Assert-Checksum([string]$File, [string]$ChecksumFile, [string]$AssetNam
         throw "No SHA-256 checksum was published for '$AssetName'."
     }
 
-    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $File).Hash.ToLowerInvariant()
+    $stream = [System.IO.File]::OpenRead($File)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $hashBytes = $sha256.ComputeHash($stream)
+            $actual = ([System.BitConverter]::ToString($hashBytes) -replace '-', '').ToLowerInvariant()
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
     if ($actual -ne $expected) {
         throw "SHA-256 mismatch for '$AssetName'."
     }

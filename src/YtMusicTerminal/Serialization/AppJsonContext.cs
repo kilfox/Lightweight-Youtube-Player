@@ -9,5 +9,5 @@ namespace YtMusicTerminal.Serialization;
     WriteIndented = true)]
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(List<HistoryEntry>))]
+[JsonSerializable(typeof(LibraryState))]
 internal sealed partial class AppJsonContext : JsonSerializerContext;
-
