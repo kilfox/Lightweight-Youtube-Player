@@ -20,6 +20,10 @@ internal static class Program
         {
             tests.Add(("Searches, resolves, and starts live playback", LivePlaybackAsync));
         }
+        if (args.Contains("--mpv", StringComparer.Ordinal))
+        {
+            tests.Add(("Starts and controls mpv IPC", MpvIpcAsync));
+        }
 
         var failed = 0;
         foreach (var test in tests)
@@ -184,6 +188,26 @@ internal static class Program
         }
 
         await mpv.StopAsync(timeout.Token).ConfigureAwait(false);
+    }
+
+    private static async Task MpvIpcAsync()
+    {
+        var mpvName = OperatingSystem.IsWindows() ? "mpv.exe" : "mpv";
+        var mpvPath = ToolLocator.Find(mpvName, null, "YTMUSIC_MPV")
+            ?? throw new InvalidOperationException("mpv is not installed.");
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using var mpv = new MpvClient(mpvPath, initialVolume: 20);
+        await mpv.StartAsync(timeout.Token).ConfigureAwait(false);
+        await mpv.SetVolumeAsync(35, timeout.Token).ConfigureAwait(false);
+
+        while (mpv.Snapshot.Volume != 35)
+        {
+            await Task.Delay(50, timeout.Token).ConfigureAwait(false);
+        }
+
+        Equal(PlaybackState.Idle, mpv.Snapshot.State);
+        Equal(35, mpv.Snapshot.Volume);
     }
 
     private static async Task LibraryStoreAsync()

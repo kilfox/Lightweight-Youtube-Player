@@ -1,6 +1,6 @@
 # YT Music Terminal
 
-A lightweight, audio-only YouTube player for Windows terminals. It keeps Chromium and WebView out of the playback path: the C# terminal process owns the interface, yt-dlp resolves searches and streams, and mpv plays audio without opening a video window.
+A lightweight, audio-only YouTube player for Windows, macOS, and Linux terminals. It keeps Chromium and WebView out of the playback path: the C# terminal process owns the interface, yt-dlp resolves searches and streams, and mpv plays audio without opening a video window.
 
 For complete installation, navigation, playback, queue, diagnostics, and troubleshooting instructions, see the [User Manual](MANUAL.md). For a quick control reference, see [HOTKEYS.md](HOTKEYS.md).
 
@@ -21,26 +21,27 @@ The initial player supports:
 - Manual playback-tool updates
 - Event-driven terminal rendering
 - Clean mpv and yt-dlp process shutdown
-- Trimmed, self-contained single-file publishing for Windows x64
+- Trimmed, self-contained single-file publishing for Windows, macOS, and Linux
 
 ## Requirements
 
-- Windows 10 or later and an ANSI-capable terminal such as Windows Terminal
+- Windows 10+, macOS 12+, or a modern 64-bit Linux distribution
+- An ANSI-capable interactive terminal
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) for development
 - yt-dlp, mpv, and Deno for playback
 
-Install the playback tools into the ignored local `tools` directory:
+On Windows, install the playback tools into the ignored local `tools` directory:
 
 ```powershell
 .\scripts\bootstrap-tools.ps1
 ```
 
-The script downloads current x64 Windows releases from the projects' GitHub repositories and verifies their published SHA-256 checksums.
+The script downloads current x64 Windows releases from the projects' GitHub repositories and verifies their published SHA-256 checksums. On macOS, install dependencies with `brew install yt-dlp mpv deno`. On Linux, install yt-dlp, mpv, and preferably Deno with your distribution's package manager.
 
 ## Run from source
 
-```powershell
-dotnet run --project .\src\YtMusicTerminal\YtMusicTerminal.csproj -c Release
+```shell
+dotnet run --project src/YtMusicTerminal/YtMusicTerminal.csproj -c Release
 ```
 
 If `dotnet` is not on `PATH`, set `YTMUSIC_DOTNET` to its full path and run:
@@ -50,6 +51,8 @@ If `dotnet` is not on `PATH`, set `YTMUSIC_DOTNET` to its full path and run:
 ```
 
 ## Install the global command
+
+### Windows
 
 After building, double-click `install.cmd`. It runs the installer with a process-only PowerShell execution-policy bypass and does not change the computer's permanent policy.
 
@@ -86,9 +89,29 @@ lightytp update
 
 This installs the self-contained player and playback tools under `%LOCALAPPDATA%\Programs\LightYTP` and adds that directory to your user `PATH`. Administrator access is not required.
 
-GitHub's automatic **Source code ZIP** is for developers and does not include the executable or playback tools. End users should download the `LightYTP-win-x64.zip` asset from Releases.
+### macOS and Linux
+
+Install yt-dlp, mpv, and Deno first. Extract the release archive, then run:
+
+```shell
+sh ./install.sh
+```
+
+The installer copies the self-contained executable to `~/.local/bin/lightytp` without requiring administrator access. If that directory is not on `PATH`, it prints the exact line to add to your shell profile.
+
+GitHub's automatic **Source code ZIP** is for developers and does not include a published executable. End users should download the release asset matching their operating system and CPU architecture.
+
+| Platform | Release asset |
+| --- | --- |
+| Windows x64 | `LightYTP-win-x64.zip` |
+| Linux x64 | `LightYTP-linux-x64.tar.gz` |
+| Linux ARM64 | `LightYTP-linux-arm64.tar.gz` |
+| macOS Intel | `LightYTP-macos-x64.tar.gz` |
+| macOS Apple Silicon | `LightYTP-macos-arm64.tar.gz` |
 
 ## Build a standalone executable
+
+Windows:
 
 ```powershell
 .\scripts\build.ps1
@@ -104,20 +127,26 @@ Native AOT is also supported when the Visual Studio Desktop Development for C++ 
 .\scripts\build.ps1 -NativeAot
 ```
 
-```powershell
-.\ytmusic.exe --yt-dlp C:\Tools\yt-dlp.exe --mpv C:\Tools\mpv.exe
+macOS or Linux:
+
+```shell
+sh ./scripts/build.sh
 ```
+
+The script detects `linux-x64`, `linux-arm64`, `osx-x64`, or `osx-arm64`. You can pass one of those runtime identifiers explicitly. All published executables are self-contained and do not require a separately installed .NET runtime.
+
+Explicit dependency paths can be passed with `--yt-dlp` and `--mpv` on every platform.
 
 Run dependency diagnostics with:
 
-```powershell
-.\ytmusic.exe --diagnose
+```shell
+lightytp --diagnose
 ```
 
 Run a muted end-to-end playback check and print the combined application/mpv working set with:
 
-```powershell
-.\ytmusic.exe --smoke-test
+```shell
+lightytp --smoke-test
 ```
 
 ## Keyboard controls
@@ -152,9 +181,7 @@ While the search field is focused, ordinary characters—including `q`—are ent
 
 Settings and history are stored under:
 
-```text
-%LOCALAPPDATA%\YtMusicTerminal
-```
+Data follows the operating system's local application-data convention: `%LOCALAPPDATA%\YtMusicTerminal` on Windows, `~/Library/Application Support/YtMusicTerminal` on macOS, and `~/.local/share/YtMusicTerminal` on most Linux systems.
 
 Queue, favorites, playback modes, and resume state are stored in `library.json`. mpv diagnostic output is written to `mpv.log`. If mpv's IPC connection closes while a track is loading, the player restarts mpv once and retries automatically.
 
@@ -171,13 +198,13 @@ Tool paths can also be supplied through `YTMUSIC_YTDLP` and `YTMUSIC_MPV`.
 - The terminal redraws only for input, state changes, terminal resizing, and playback progress
 - History is capped at 100 entries
 
-The current Windows x64 measurement is approximately 113 MiB combined working set during playback: roughly 29 MiB for `ytmusic.exe` and 84 MiB for the selected static mpv build. The published application itself is approximately 12 MiB. yt-dlp creates a temporary spike only while resolving YouTube data and is not resident during playback.
+The measured Windows x64 footprint is approximately 113 MiB combined during playback: roughly 29 MiB for LightYTP and 84 MiB for the selected static mpv build. Actual usage varies by operating system and mpv package. yt-dlp creates a temporary spike only while resolving YouTube data and is not resident during playback.
 
 ## Development
 
-```powershell
-dotnet build .\YtMusicTerminal.slnx -c Release
-dotnet run --project .\tests\YtMusicTerminal.Tests\YtMusicTerminal.Tests.csproj -c Release
+```shell
+dotnet build YtMusicTerminal.slnx -c Release
+dotnet run --project tests/YtMusicTerminal.Tests/YtMusicTerminal.Tests.csproj -c Release
 ```
 
 The test project intentionally uses no test framework dependency. It is a deterministic executable that returns a nonzero exit code on failure, keeping restore and trimming analysis minimal.

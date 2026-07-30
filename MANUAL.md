@@ -6,23 +6,25 @@ YT Music Terminal searches YouTube, resolves an audio stream with yt-dlp, and pl
 
 Three processes are involved:
 
-- `ytmusic.exe` displays the terminal interface and manages the player.
-- `yt-dlp.exe` runs temporarily during searches and track loading, then exits.
-- `mpv.exe` remains open while the application is running and handles audio playback.
+- `ytmusic` (`ytmusic.exe` on Windows) displays the terminal interface and manages the player.
+- yt-dlp runs temporarily during searches and track loading, then exits.
+- mpv remains open while the application is running and handles audio playback.
 
 The program streams audio directly. It does not download songs for offline use. It selects the best available audio format by default.
 
 ## 2. Requirements
 
-- Windows 10 or later
-- Windows Terminal, PowerShell, or another ANSI-capable terminal
+- Windows 10+, macOS 12+, or a modern 64-bit Linux distribution
+- An ANSI-capable interactive terminal
 - yt-dlp
 - mpv
 - Deno, used by yt-dlp for current YouTube JavaScript challenges
 
-The standalone `ytmusic.exe` does not require an installed .NET runtime.
+The published standalone executable does not require an installed .NET runtime.
 
 ## 3. Install the playback tools
+
+### Windows
 
 Open PowerShell in the project directory and run:
 
@@ -37,6 +39,18 @@ To replace existing copies with current releases:
 ```powershell
 .\scripts\bootstrap-tools.ps1 -Force
 ```
+
+### macOS
+
+With Homebrew installed:
+
+```shell
+brew install yt-dlp mpv deno
+```
+
+### Linux
+
+Install yt-dlp, mpv, and preferably Deno with your distribution's package manager. Package names and versions differ by distribution; keep yt-dlp current because YouTube changes frequently.
 
 ## 4. Start the program
 
@@ -66,6 +80,14 @@ The installer copies the player and its tools to `%LOCALAPPDATA%\Programs\LightY
 
 Do not use GitHub's automatic Source code ZIP unless you intend to build the project with the .NET SDK. End users need the `LightYTP-win-x64.zip` file from the Releases section.
 
+On macOS or Linux, extract the release archive matching your CPU and run:
+
+```shell
+sh ./install.sh
+```
+
+This installs `lightytp` under `~/.local/bin`. The installer reports if that directory must be added to `PATH`. macOS users may need to approve the unsigned open-source executable in Privacy & Security after its first launch.
+
 ### Run without installing
 
 From the project directory, run the published executable:
@@ -78,6 +100,12 @@ If the project was built after running `scripts\bootstrap-tools.ps1`, the playba
 
 ```powershell
 .\artifacts\win-x64\ytmusic.exe
+```
+
+On macOS or Linux, run the matching published executable directly:
+
+```shell
+./artifacts/linux-x64/ytmusic
 ```
 
 You can also run from source when the .NET 10 SDK is installed:
@@ -99,6 +127,8 @@ Manually update the bundled playback tools:
 lightytp update
 ```
 
+On macOS and Linux, `lightytp update` prints the appropriate package-manager guidance because those systems own their installed playback tools.
+
 ### Configure permanent tool paths
 
 Instead of passing paths on every launch, set environment variables:
@@ -116,6 +146,13 @@ To persist them for your Windows user account:
 ```
 
 Open a new terminal after setting persistent environment variables.
+
+On macOS or Linux, use shell environment variables instead:
+
+```shell
+export YTMUSIC_YTDLP=/path/to/yt-dlp
+export YTMUSIC_MPV=/path/to/mpv
+```
 
 ## 5. Interface overview
 
@@ -224,29 +261,25 @@ The volume is saved when the program exits normally.
 
 Verify that the application can find its dependencies:
 
-```powershell
-.\artifacts\win-x64\ytmusic.exe --yt-dlp .\tools\yt-dlp.exe --mpv .\tools\mpv.exe --diagnose
+```shell
+lightytp --diagnose
 ```
 
 Run a muted end-to-end test that searches YouTube, resolves a track, starts playback, and reports memory usage:
 
-```powershell
-.\artifacts\win-x64\ytmusic.exe --yt-dlp .\tools\yt-dlp.exe --mpv .\tools\mpv.exe --smoke-test
+```shell
+lightytp --smoke-test
 ```
 
 Display all command-line options:
 
-```powershell
-.\artifacts\win-x64\ytmusic.exe --help
+```shell
+lightytp --help
 ```
 
 ## 12. Settings and data
 
-Application data is stored under:
-
-```text
-%LOCALAPPDATA%\YtMusicTerminal
-```
+Application data is stored under `%LOCALAPPDATA%\YtMusicTerminal` on Windows, `~/Library/Application Support/YtMusicTerminal` on macOS, and `~/.local/share/YtMusicTerminal` on most Linux systems.
 
 Files in this directory include:
 
@@ -261,7 +294,7 @@ The initial version does not read browser profiles, browser cookies, passwords, 
 
 ### A required tool is missing
 
-Run:
+On Windows, run:
 
 ```powershell
 .\scripts\bootstrap-tools.ps1
@@ -269,9 +302,11 @@ Run:
 
 Then use `--diagnose` to confirm the detected paths and versions.
 
+On macOS, run `brew install yt-dlp mpv deno`. On Linux, install the same tools with your distribution's package manager.
+
 ### Search or playback suddenly stops working
 
-YouTube changes frequently. Update the external tools:
+YouTube changes frequently. On Windows, update the external tools with:
 
 ```powershell
 .\scripts\bootstrap-tools.ps1 -Force
@@ -279,7 +314,9 @@ YouTube changes frequently. Update the external tools:
 
 Retry the same search after the update.
 
-If the mpv connection closes while a track is loading, the player automatically restarts mpv and retries once. If playback still fails, inspect `%LOCALAPPDATA%\YtMusicTerminal\mpv.log`; the displayed error also includes this path.
+On macOS, use `brew upgrade yt-dlp mpv deno`. On Linux, update the packages with your distribution's package manager.
+
+If the mpv connection closes while a track is loading, the player automatically restarts mpv and retries once. If playback still fails, inspect the displayed `mpv.log` path.
 
 ### A particular track cannot be played
 
@@ -289,21 +326,21 @@ Some YouTube environments require cookies or a PO-token provider. Credential and
 
 ### The interface is corrupted or does not fit
 
-- Use Windows Terminal rather than the legacy Windows Console Host.
+- On Windows, use Windows Terminal rather than the legacy Windows Console Host.
 - Resize the terminal to at least 70x18.
 - Avoid resizing repeatedly while entering a search.
 - If the program is interrupted without restoring the terminal, close and reopen that terminal tab.
 
 ### There is no audio
 
-- Confirm Windows has an active output device.
+- Confirm the operating system has an active output device.
 - Increase volume with `+`.
-- Check the Windows volume mixer for `mpv.exe`.
+- Check the operating system volume mixer for mpv.
 - Run the `--smoke-test` command and inspect its result.
 
 ### The program cannot save settings or history
 
-Check that your Windows account can write to `%LOCALAPPDATA%\YtMusicTerminal`. A malformed JSON file will be reported rather than silently overwritten.
+Check that your account can write to the platform data directory described above. A malformed JSON file will be reported rather than silently overwritten.
 
 ## 14. Build the program
 
@@ -325,6 +362,14 @@ Native AOT publishing is optional and requires the Visual Studio Desktop Develop
 .\scripts\build.ps1 -NativeAot
 ```
 
+On macOS or Linux:
+
+```shell
+sh ./scripts/build.sh
+```
+
+Pass `linux-x64`, `linux-arm64`, `osx-x64`, or `osx-arm64` to override automatic platform detection.
+
 ## 15. Resource usage
 
 The measured Windows x64 playback footprint during development was approximately:
@@ -333,7 +378,7 @@ The measured Windows x64 playback footprint during development was approximately
 - `mpv.exe`: 84 MiB working set
 - Combined steady playback: 113 MiB
 
-yt-dlp runs only while searching or resolving a stream and exits before steady playback. Actual measurements vary by Windows version, mpv build, audio driver, terminal, and track format.
+yt-dlp runs only while searching or resolving a stream and exits before steady playback. Actual measurements vary by operating system, mpv build, audio driver, terminal, and track format.
 
 ## 16. Legal and third-party software
 

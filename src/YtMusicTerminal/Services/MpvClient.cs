@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 using YtMusicTerminal.Models;
@@ -20,7 +19,8 @@ public sealed class MpvClient : IAsyncDisposable
 
     private Process? _process;
     private WindowsProcessJob? _processJob;
-    private NamedPipeClientStream? _pipe;
+    private MpvIpcEndpoint? _ipcEndpoint;
+    private Stream? _pipe;
     private StreamReader? _reader;
     private StreamWriter? _writer;
     private Task? _readerTask;
@@ -88,15 +88,7 @@ public sealed class MpvClient : IAsyncDisposable
             return;
         }
 
-        var pipeName = $"ytmusic-{Environment.ProcessId}-{Guid.NewGuid():N}";
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = _executable,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden,
-            WorkingDirectory = Path.GetDirectoryName(_executable) ?? AppContext.BaseDirectory
-        };
+        _ipcEndpoint = MpvIpcEndpoint.Create();
 
         string[] arguments =
         [
@@ -112,7 +104,7 @@ public sealed class MpvClient : IAsyncDisposable
             "--osc=no",
             "--osd-level=0",
             "--autoload-files=no",
-            $"--input-ipc-server=\\\\.\\pipe\\{pipeName}",
+            $"--input-ipc-server={_ipcEndpoint.Argument}",
             $"--volume={_snapshot.Volume.ToString(CultureInfo.InvariantCulture)}",
             "--cache=yes",
             "--cache-secs=3",
@@ -131,10 +123,7 @@ public sealed class MpvClient : IAsyncDisposable
             arguments = [.. arguments, $"--log-file={_logFile}", "--msg-level=all=warn"];
         }
 
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        var startInfo = CreateProcessStartInfo(arguments);
 
         var toolDirectory = Path.GetDirectoryName(_executable);
         if (!string.IsNullOrWhiteSpace(toolDirectory))
@@ -167,6 +156,8 @@ public sealed class MpvClient : IAsyncDisposable
             _process = null;
             _processJob?.Dispose();
             _processJob = null;
+            _ipcEndpoint.Dispose();
+            _ipcEndpoint = null;
             throw new FileNotFoundException("Could not start mpv.", _executable, exception);
         }
         catch
@@ -176,24 +167,22 @@ public sealed class MpvClient : IAsyncDisposable
             _process = null;
             _processJob?.Dispose();
             _processJob = null;
+            _ipcEndpoint.Dispose();
+            _ipcEndpoint = null;
             throw;
         }
 
-        _pipe = new NamedPipeClientStream(
-            ".",
-            pipeName,
-            PipeDirection.InOut,
-            PipeOptions.Asynchronous);
-
         try
         {
-            await _pipe.ConnectAsync(5_000, cancellationToken).ConfigureAwait(false);
+            _pipe = await _ipcEndpoint.ConnectAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             TryKillProcess();
             _processJob?.Dispose();
             _processJob = null;
+            _ipcEndpoint.Dispose();
+            _ipcEndpoint = null;
             throw;
         }
 
@@ -303,9 +292,11 @@ public sealed class MpvClient : IAsyncDisposable
             TryDispose(_writer);
             TryDispose(_reader);
             TryDispose(_pipe);
+            _ipcEndpoint?.Dispose();
             _writer = null;
             _reader = null;
             _pipe = null;
+            _ipcEndpoint = null;
             _readerTask = null;
             _process?.Dispose();
             _process = null;
@@ -618,7 +609,7 @@ public sealed class MpvClient : IAsyncDisposable
         }
 
         _disposed = true;
-        if (_writer is not null && _pipe?.IsConnected == true)
+        if (_writer is not null)
         {
             using var quitTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
             try
@@ -645,6 +636,8 @@ public sealed class MpvClient : IAsyncDisposable
         TryDispose(_writer);
         TryDispose(_reader);
         TryDispose(_pipe);
+        _ipcEndpoint?.Dispose();
+        _ipcEndpoint = null;
 
         if (_process is not null)
         {
@@ -681,6 +674,47 @@ public sealed class MpvClient : IAsyncDisposable
         catch (InvalidOperationException)
         {
         }
+    }
+
+    private ProcessStartInfo CreateProcessStartInfo(IReadOnlyList<string> arguments)
+    {
+        var workingDirectory = Path.GetDirectoryName(_executable) ?? AppContext.BaseDirectory;
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _executable,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden,
+            WorkingDirectory = workingDirectory
+        };
+
+        if (OperatingSystem.IsWindows())
+        {
+            foreach (var argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            return startInfo;
+        }
+
+        startInfo.FileName = "/bin/sh";
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add(
+            "parent_pid=$1; shift; \"$@\" & child_pid=$!; "
+            + "cleanup() { trap - EXIT HUP INT TERM; kill \"$child_pid\" 2>/dev/null || true; "
+            + "wait \"$child_pid\" 2>/dev/null || true; }; "
+            + "trap cleanup EXIT HUP INT TERM; "
+            + "while kill -0 \"$parent_pid\" 2>/dev/null && kill -0 \"$child_pid\" 2>/dev/null; do sleep 1; done");
+        startInfo.ArgumentList.Add("lightytp-mpv-supervisor");
+        startInfo.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add(_executable);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        return startInfo;
     }
 
     private static void TryDispose(IDisposable? disposable)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using YtMusicTerminal.Configuration;
 using YtMusicTerminal.Models;
 using YtMusicTerminal.Services;
@@ -107,6 +108,8 @@ internal static class Program
             eventArgs.Cancel = true;
             cancellation.Cancel();
         };
+        using var hangupSignal = RegisterShutdownSignal(PosixSignal.SIGHUP, cancellation);
+        using var terminateSignal = RegisterShutdownSignal(PosixSignal.SIGTERM, cancellation);
 
         var processRunner = new ProcessRunner();
         var youtube = new YtDlpClient(ytDlpPath, processRunner);
@@ -250,12 +253,33 @@ internal static class Program
         }
 
         Console.Error.WriteLine();
-        Console.Error.WriteLine("Run scripts\\bootstrap-tools.ps1 or provide paths with:");
-        Console.Error.WriteLine("  ytmusic --yt-dlp C:\\path\\yt-dlp.exe --mpv C:\\path\\mpv.exe");
+        if (OperatingSystem.IsWindows())
+        {
+            Console.Error.WriteLine("Run scripts\\bootstrap-tools.ps1 or provide paths with:");
+            Console.Error.WriteLine("  ytmusic --yt-dlp C:\\path\\yt-dlp.exe --mpv C:\\path\\mpv.exe");
+        }
+        else
+        {
+            Console.Error.WriteLine("Install yt-dlp and mpv with your package manager or provide paths with:");
+            Console.Error.WriteLine("  ytmusic --yt-dlp /path/to/yt-dlp --mpv /path/to/mpv");
+            if (OperatingSystem.IsMacOS())
+            {
+                Console.Error.WriteLine("  Homebrew: brew install yt-dlp mpv deno");
+            }
+        }
     }
 
     private static async Task<int> UpdateToolsAsync()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            Console.WriteLine("LightYTP uses tools installed by your system package manager.");
+            Console.WriteLine(OperatingSystem.IsMacOS()
+                ? "Update them with: brew upgrade yt-dlp mpv deno"
+                : "Update yt-dlp, mpv, and Deno with your Linux package manager.");
+            return 0;
+        }
+
         var installedScript = Path.Combine(AppContext.BaseDirectory, "update-tools.ps1");
         var sourceScript = Path.Combine(Environment.CurrentDirectory, "scripts", "bootstrap-tools.ps1");
         var script = File.Exists(installedScript) ? installedScript : sourceScript;
@@ -354,6 +378,22 @@ internal static class Program
 
     private static string FormatMegabytes(long bytes) =>
         (bytes / 1024d / 1024d).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static PosixSignalRegistration? RegisterShutdownSignal(
+        PosixSignal signal,
+        CancellationTokenSource cancellation)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        return PosixSignalRegistration.Create(signal, context =>
+        {
+            context.Cancel = true;
+            cancellation.Cancel();
+        });
+    }
 
     private sealed record CliOptions(
         bool ShowHelp,
