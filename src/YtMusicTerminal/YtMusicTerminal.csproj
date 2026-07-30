@@ -4,9 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>ytmusic</AssemblyName>
     <RootNamespace>YtMusicTerminal</RootNamespace>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <IsAotCompatible>true</IsAotCompatible>
     <InvariantGlobalization>false</InvariantGlobalization>
     <StripSymbols>true</StripSymbols>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
   </PropertyGroup>
 </Project>
