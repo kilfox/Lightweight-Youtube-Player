@@ -1,8 +1,8 @@
-# YT Music Terminal User Manual
+# LightYTP User Manual
 
 ## 1. What the program does
 
-YT Music Terminal searches YouTube, resolves an audio stream with yt-dlp, and plays it through mpv without opening Chrome or a video window.
+LightYTP searches YouTube, resolves an audio stream with yt-dlp, and plays it through mpv without opening Chrome or a video window.
 
 Three processes are involved:
 
@@ -10,149 +10,87 @@ Three processes are involved:
 - yt-dlp runs temporarily during searches and track loading, then exits.
 - mpv remains open while the application is running and handles audio playback.
 
-The program streams audio directly. It does not download songs for offline use. It selects the best available audio format by default.
+The program streams audio directly. It does not download songs for offline use. It selects the best available audio format by default, and YouTube video ads are not inserted into the resolved audio stream.
 
-## 2. Requirements
+## 2. Download LightYTP
 
-- Windows 10+, macOS 12+, or a modern 64-bit Linux distribution
-- An ANSI-capable interactive terminal
-- yt-dlp
-- mpv
-- Deno, used by yt-dlp for current YouTube JavaScript challenges
+Open the [latest GitHub release](https://github.com/kilfox/Lightweight-Youtube-Player/releases/latest) and download the file matching your computer:
 
-The published standalone executable does not require an installed .NET runtime.
+| Platform | Release file |
+| --- | --- |
+| Windows 64-bit | `LightYTP-win-x64.zip` |
+| Linux Intel/AMD 64-bit | `LightYTP-linux-x64.tar.gz` |
+| Linux ARM64 | `LightYTP-linux-arm64.tar.gz` |
+| Intel Mac | `LightYTP-macos-x64.tar.gz` |
+| Apple Silicon Mac | `LightYTP-macos-arm64.tar.gz` |
 
-## 3. Install the playback tools
+Do not download GitHub's automatic Source code ZIP or TAR.GZ files. Those contain source code, not the ready-to-run application. The release executable is self-contained and does not require the .NET SDK or runtime.
+
+## 3. Install LightYTP
 
 ### Windows
 
-Open PowerShell in the project directory and run:
+1. Right-click `LightYTP-win-x64.zip` and choose **Extract All**.
+2. Open the extracted folder.
+3. Double-click `install.cmd`.
+4. Open a new Windows Terminal or PowerShell window.
+5. Run `lightytp`.
 
-```powershell
-.\scripts\bootstrap-tools.ps1
-```
-
-This downloads verified x64 Windows versions of yt-dlp, Deno, and mpv into the local `tools` directory.
-
-To replace existing copies with current releases:
-
-```powershell
-.\scripts\bootstrap-tools.ps1 -Force
-```
+The Windows package includes yt-dlp, mpv, and Deno. Installation does not require administrator access. If Windows displays a security prompt, confirm that you downloaded the file from the official `kilfox/Lightweight-Youtube-Player` release page before continuing.
 
 ### macOS
 
-With Homebrew installed:
+1. Install [Homebrew](https://brew.sh/) if it is not already installed.
+2. Install the playback tools:
 
-```shell
-brew install yt-dlp mpv deno
-```
+   ```shell
+   brew install yt-dlp mpv deno
+   ```
+
+3. Extract the downloaded Intel or Apple Silicon release archive.
+4. Open Terminal in the extracted folder.
+5. Run:
+
+   ```shell
+   sh ./install.sh
+   ```
+
+6. Open a new terminal and run `lightytp`.
+
+If macOS blocks the unsigned open-source executable, open **System Settings → Privacy & Security**, allow LightYTP, and launch it again.
 
 ### Linux
 
-Install yt-dlp, mpv, and preferably Deno with your distribution's package manager. Package names and versions differ by distribution; keep yt-dlp current because YouTube changes frequently.
+1. Install yt-dlp, mpv, and Deno with your distribution's package manager.
+2. Extract the downloaded x64 or ARM64 archive.
+3. Open a terminal in the extracted folder.
+4. Run:
 
-## 4. Start the program
+   ```shell
+   sh ./install.sh
+   ```
 
-### Install the `lightytp` command
+5. Open a new terminal and run `lightytp`.
 
-After downloading and extracting the Windows release, double-click `install.cmd`. This uses a process-only PowerShell execution-policy bypass without changing the permanent system policy.
+The installer copies LightYTP to `~/.local/bin`. If that directory is not on `PATH`, the installer prints the exact line to add to your shell profile.
 
-You can alternatively install it for your Windows user from PowerShell:
+## 4. Launch the program
 
-```powershell
-.\scripts\install.ps1
-```
+Start normally, start with a search, or open a YouTube URL directly:
 
-If script execution is disabled, run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
-```
-
-Open a new terminal, then start the player from any directory:
-
-```powershell
+```shell
 lightytp
-```
-
-The installer copies the player and its tools to `%LOCALAPPDATA%\Programs\LightYTP` and adds that directory to your user `PATH`. It does not require administrator access.
-
-Do not use GitHub's automatic Source code ZIP unless you intend to build the project with the .NET SDK. End users need the `LightYTP-win-x64.zip` file from the Releases section.
-
-On macOS or Linux, extract the release archive matching your CPU and run:
-
-```shell
-sh ./install.sh
-```
-
-This installs `lightytp` under `~/.local/bin`. The installer reports if that directory must be added to `PATH`. macOS users may need to approve the unsigned open-source executable in Privacy & Security after its first launch.
-
-### Run without installing
-
-From the project directory, run the published executable:
-
-```powershell
-.\artifacts\win-x64\ytmusic.exe --yt-dlp .\tools\yt-dlp.exe --mpv .\tools\mpv.exe
-```
-
-If the project was built after running `scripts\bootstrap-tools.ps1`, the playback tools are copied next to the published application. You can then double-click `artifacts\win-x64\ytmusic.exe` or run it without path options:
-
-```powershell
-.\artifacts\win-x64\ytmusic.exe
-```
-
-On macOS or Linux, run the matching published executable directly:
-
-```shell
-./artifacts/linux-x64/ytmusic
-```
-
-You can also run from source when the .NET 10 SDK is installed:
-
-```powershell
-.\scripts\run.ps1
-```
-
-Start with a search query or YouTube URL directly:
-
-```powershell
 lightytp "Daft Punk Get Lucky"
 lightytp "https://www.youtube.com/watch?v=..."
 ```
 
-Manually update the bundled playback tools:
+To update playback tools when YouTube changes cause problems:
 
-```powershell
+```shell
 lightytp update
 ```
 
-On macOS and Linux, `lightytp update` prints the appropriate package-manager guidance because those systems own their installed playback tools.
-
-### Configure permanent tool paths
-
-Instead of passing paths on every launch, set environment variables:
-
-```powershell
-$env:YTMUSIC_YTDLP = "C:\Tools\yt-dlp.exe"
-$env:YTMUSIC_MPV = "C:\Tools\mpv.exe"
-```
-
-To persist them for your Windows user account:
-
-```powershell
-[Environment]::SetEnvironmentVariable("YTMUSIC_YTDLP", "C:\Tools\yt-dlp.exe", "User")
-[Environment]::SetEnvironmentVariable("YTMUSIC_MPV", "C:\Tools\mpv.exe", "User")
-```
-
-Open a new terminal after setting persistent environment variables.
-
-On macOS or Linux, use shell environment variables instead:
-
-```shell
-export YTMUSIC_YTDLP=/path/to/yt-dlp
-export YTMUSIC_MPV=/path/to/mpv
-```
+Windows updates its bundled tools. macOS and Linux display the appropriate package-manager guidance.
 
 ## 5. Interface overview
 
@@ -288,28 +226,24 @@ Files in this directory include:
 - `library.json`: queue, favorites, shuffle/repeat state, and resume position.
 - `mpv.log`: detailed playback-engine diagnostics.
 
-The initial version does not read browser profiles, browser cookies, passwords, or YouTube account credentials.
+LightYTP does not read browser profiles, browser cookies, passwords, or YouTube account credentials.
 
 ## 13. Troubleshooting
 
 ### A required tool is missing
 
-On Windows, run:
+On Windows, download `LightYTP-win-x64.zip` again from the latest release, extract all files, and rerun `install.cmd`.
 
-```powershell
-.\scripts\bootstrap-tools.ps1
-```
-
-Then use `--diagnose` to confirm the detected paths and versions.
+Then use `lightytp --diagnose` to confirm the detected paths and versions.
 
 On macOS, run `brew install yt-dlp mpv deno`. On Linux, install the same tools with your distribution's package manager.
 
 ### Search or playback suddenly stops working
 
-YouTube changes frequently. On Windows, update the external tools with:
+YouTube changes frequently. Update the playback tools with:
 
-```powershell
-.\scripts\bootstrap-tools.ps1 -Force
+```shell
+lightytp update
 ```
 
 Retry the same search after the update.
@@ -342,35 +276,7 @@ Some YouTube environments require cookies or a PO-token provider. Credential and
 
 Check that your account can write to the platform data directory described above. A malformed JSON file will be reported rather than silently overwritten.
 
-## 14. Build the program
-
-Install the .NET 10 SDK, then run:
-
-```powershell
-.\scripts\build.ps1
-```
-
-The trimmed, self-contained Windows executable is written to:
-
-```text
-artifacts\win-x64\ytmusic.exe
-```
-
-Native AOT publishing is optional and requires the Visual Studio Desktop Development for C++ workload:
-
-```powershell
-.\scripts\build.ps1 -NativeAot
-```
-
-On macOS or Linux:
-
-```shell
-sh ./scripts/build.sh
-```
-
-Pass `linux-x64`, `linux-arm64`, `osx-x64`, or `osx-arm64` to override automatic platform detection.
-
-## 15. Resource usage
+## 14. Resource usage
 
 The measured Windows x64 playback footprint during development was approximately:
 
@@ -380,8 +286,8 @@ The measured Windows x64 playback footprint during development was approximately
 
 yt-dlp runs only while searching or resolving a stream and exits before steady playback. Actual measurements vary by operating system, mpv build, audio driver, terminal, and track format.
 
-## 16. Legal and third-party software
+## 15. Legal and third-party software
 
-YT Music Terminal is an independent application and is not affiliated with YouTube or Google. You are responsible for complying with YouTube's terms, copyright rules, and the licenses of installed tools.
+LightYTP is an independent application and is not affiliated with YouTube or Google. You are responsible for complying with YouTube's terms, copyright rules, and the licenses of installed tools.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for external tool information.

@@ -1,12 +1,14 @@
-# YT Music Terminal
+# LightYTP
 
-A lightweight, audio-only YouTube player for Windows, macOS, and Linux terminals. It keeps Chromium and WebView out of the playback path: the C# terminal process owns the interface, yt-dlp resolves searches and streams, and mpv plays audio without opening a video window.
+A lightweight, audio-only YouTube player for Windows, macOS, and Linux terminals. LightYTP plays music without keeping Chrome, Electron, or a video window open, and YouTube video ads are not inserted into the resolved audio stream.
+
+**Download the app from the [latest GitHub release](https://github.com/kilfox/Lightweight-Youtube-Player/releases/latest). Do not download GitHub's automatic Source code archive.**
 
 For complete installation, navigation, playback, queue, diagnostics, and troubleshooting instructions, see the [User Manual](MANUAL.md). For a quick control reference, see [HOTKEYS.md](HOTKEYS.md).
 
 ## Status
 
-The initial player supports:
+LightYTP supports:
 
 - YouTube search
 - Audio-only streaming
@@ -23,119 +25,92 @@ The initial player supports:
 - Clean mpv and yt-dlp process shutdown
 - Trimmed, self-contained single-file publishing for Windows, macOS, and Linux
 
-## Requirements
+## Download the correct release
 
-- Windows 10+, macOS 12+, or a modern 64-bit Linux distribution
-- An ANSI-capable interactive terminal
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) for development
-- yt-dlp, mpv, and Deno for playback
+| Your computer | File to download |
+| --- | --- |
+| Windows 64-bit | `LightYTP-win-x64.zip` |
+| Linux Intel/AMD 64-bit | `LightYTP-linux-x64.tar.gz` |
+| Linux ARM64 | `LightYTP-linux-arm64.tar.gz` |
+| Intel Mac | `LightYTP-macos-x64.tar.gz` |
+| Apple Silicon Mac (M1 or newer) | `LightYTP-macos-arm64.tar.gz` |
 
-On Windows, install the playback tools into the ignored local `tools` directory:
+The release contains a self-contained LightYTP executable. Users do not need the .NET SDK.
 
-```powershell
-.\scripts\bootstrap-tools.ps1
-```
-
-The script downloads current x64 Windows releases from the projects' GitHub repositories and verifies their published SHA-256 checksums. On macOS, install dependencies with `brew install yt-dlp mpv deno`. On Linux, install yt-dlp, mpv, and preferably Deno with your distribution's package manager.
-
-## Run from source
-
-```shell
-dotnet run --project src/YtMusicTerminal/YtMusicTerminal.csproj -c Release
-```
-
-If `dotnet` is not on `PATH`, set `YTMUSIC_DOTNET` to its full path and run:
-
-```powershell
-.\scripts\run.ps1
-```
-
-## Install the global command
+## Install and launch
 
 ### Windows
 
-After building, double-click `install.cmd`. It runs the installer with a process-only PowerShell execution-policy bypass and does not change the computer's permanent policy.
-
-Alternatively, install from PowerShell:
-
-```powershell
-.\scripts\install.ps1
-```
-
-If PowerShell reports that script execution is disabled, run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
-```
-
-Open a new terminal and launch it from any directory:
+1. Download `LightYTP-win-x64.zip` from the [latest release](https://github.com/kilfox/Lightweight-Youtube-Player/releases/latest).
+2. Right-click the ZIP and choose **Extract All**.
+3. Open the extracted folder and double-click `install.cmd`.
+4. Open a new Windows Terminal or PowerShell window.
+5. Launch the player:
 
 ```powershell
 lightytp
 ```
 
-Start with a search or URL directly:
+The Windows release already includes yt-dlp, mpv, and Deno. Administrator access and a separate .NET installation are not required.
 
-```powershell
+### macOS
+
+1. Install the playback tools with [Homebrew](https://brew.sh/):
+
+   ```shell
+   brew install yt-dlp mpv deno
+   ```
+
+2. Download the Intel or Apple Silicon archive from the [latest release](https://github.com/kilfox/Lightweight-Youtube-Player/releases/latest).
+3. Extract the archive and open Terminal in the extracted folder.
+4. Install the global command:
+
+   ```shell
+   sh ./install.sh
+   ```
+
+5. Open a new terminal and run `lightytp`.
+
+If macOS blocks the unsigned open-source executable, open **System Settings → Privacy & Security** and allow LightYTP, then launch it again.
+
+### Linux
+
+1. Install yt-dlp, mpv, and Deno with your distribution's package manager.
+2. Download the x64 or ARM64 archive from the [latest release](https://github.com/kilfox/Lightweight-Youtube-Player/releases/latest).
+3. Extract it and open a terminal in that folder.
+4. Install the global command:
+
+   ```shell
+   sh ./install.sh
+   ```
+
+5. Open a new terminal and run `lightytp`.
+
+The installer uses `~/.local/bin` and prints the exact `PATH` line if your shell does not already include that directory.
+
+## Start using LightYTP
+
+Launch normally, with a search, or with a YouTube URL:
+
+```shell
+lightytp
 lightytp "Daft Punk Get Lucky"
 lightytp "https://www.youtube.com/watch?v=..."
 ```
 
-Update yt-dlp, mpv, and Deno only when requested:
+Inside the player:
 
-```powershell
+1. Type a song or artist and press `Enter`.
+2. Select a result with `Up` or `Down`.
+3. Press `Enter` to play it.
+4. Press `Escape` to focus the player controls.
+5. Use `Up` and `Down` for volume, `Space` to pause, and `Left` or `Right` to seek.
+
+Update playback tools when YouTube changes cause search or playback problems:
+
+```shell
 lightytp update
 ```
-
-This installs the self-contained player and playback tools under `%LOCALAPPDATA%\Programs\LightYTP` and adds that directory to your user `PATH`. Administrator access is not required.
-
-### macOS and Linux
-
-Install yt-dlp, mpv, and Deno first. Extract the release archive, then run:
-
-```shell
-sh ./install.sh
-```
-
-The installer copies the self-contained executable to `~/.local/bin/lightytp` without requiring administrator access. If that directory is not on `PATH`, it prints the exact line to add to your shell profile.
-
-GitHub's automatic **Source code ZIP** is for developers and does not include a published executable. End users should download the release asset matching their operating system and CPU architecture.
-
-| Platform | Release asset |
-| --- | --- |
-| Windows x64 | `LightYTP-win-x64.zip` |
-| Linux x64 | `LightYTP-linux-x64.tar.gz` |
-| Linux ARM64 | `LightYTP-linux-arm64.tar.gz` |
-| macOS Intel | `LightYTP-macos-x64.tar.gz` |
-| macOS Apple Silicon | `LightYTP-macos-arm64.tar.gz` |
-
-## Build a standalone executable
-
-Windows:
-
-```powershell
-.\scripts\build.ps1
-```
-
-The self-contained Windows build is written to `artifacts\win-x64`. You can also place playback tools on `PATH` or pass explicit paths.
-
-When `scripts\bootstrap-tools.ps1` has been run before building, the build script automatically copies yt-dlp, Deno, and mpv into `artifacts\win-x64\tools`. In that case, `ytmusic.exe` can be launched directly or by double-clicking it.
-
-Native AOT is also supported when the Visual Studio Desktop Development for C++ workload is installed:
-
-```powershell
-.\scripts\build.ps1 -NativeAot
-```
-
-macOS or Linux:
-
-```shell
-sh ./scripts/build.sh
-```
-
-The script detects `linux-x64`, `linux-arm64`, `osx-x64`, or `osx-arm64`. You can pass one of those runtime identifiers explicitly. All published executables are self-contained and do not require a separately installed .NET runtime.
-
-Explicit dependency paths can be passed with `--yt-dlp` and `--mpv` on every platform.
 
 Run dependency diagnostics with:
 
@@ -179,8 +154,6 @@ While the search field is focused, ordinary characters—including `q`—are ent
 
 ## Data and configuration
 
-Settings and history are stored under:
-
 Data follows the operating system's local application-data convention: `%LOCALAPPDATA%\YtMusicTerminal` on Windows, `~/Library/Application Support/YtMusicTerminal` on macOS, and `~/.local/share/YtMusicTerminal` on most Linux systems.
 
 Queue, favorites, playback modes, and resume state are stored in `library.json`. mpv diagnostic output is written to `mpv.log`. If mpv's IPC connection closes while a track is loading, the player restarts mpv once and retries automatically.
@@ -199,15 +172,6 @@ Tool paths can also be supplied through `YTMUSIC_YTDLP` and `YTMUSIC_MPV`.
 - History is capped at 100 entries
 
 The measured Windows x64 footprint is approximately 113 MiB combined during playback: roughly 29 MiB for LightYTP and 84 MiB for the selected static mpv build. Actual usage varies by operating system and mpv package. yt-dlp creates a temporary spike only while resolving YouTube data and is not resident during playback.
-
-## Development
-
-```shell
-dotnet build YtMusicTerminal.slnx -c Release
-dotnet run --project tests/YtMusicTerminal.Tests/YtMusicTerminal.Tests.csproj -c Release
-```
-
-The test project intentionally uses no test framework dependency. It is a deterministic executable that returns a nonzero exit code on failure, keeping restore and trimming analysis minimal.
 
 ## YouTube reliability
 
