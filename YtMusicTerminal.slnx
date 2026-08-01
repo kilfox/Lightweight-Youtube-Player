@@ -1,5 +1,5 @@
 <Solution>
+  <Project Path="src/LightYTP.Gui/LightYTP.Gui.csproj" />
   <Project Path="src/YtMusicTerminal/YtMusicTerminal.csproj" />
   <Project Path="tests/YtMusicTerminal.Tests/YtMusicTerminal.Tests.csproj" />
 </Solution>
-

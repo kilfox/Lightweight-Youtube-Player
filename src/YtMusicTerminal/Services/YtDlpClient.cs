@@ -8,10 +8,17 @@ public sealed class YtDlpClient
 {
     private static readonly TimeSpan SearchTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ResolveTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan SearchCacheLifetime = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan AudioUrlCacheLifetime = TimeSpan.FromMinutes(15);
+    private const int SearchCacheCapacity = 10;
+    private const int AudioUrlCacheCapacity = 100;
 
     private readonly string _executable;
     private readonly IProcessRunner _processRunner;
     private readonly IReadOnlyDictionary<string, string?> _environment;
+    private readonly object _cacheLock = new();
+    private readonly Dictionary<string, SearchCacheEntry> _searchCache = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AudioUrlCacheEntry> _audioUrlCache = new(StringComparer.Ordinal);
 
     public YtDlpClient(string executable, IProcessRunner processRunner)
     {
@@ -38,7 +45,25 @@ public sealed class YtDlpClient
             return [];
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         var safeLimit = Math.Clamp(resultLimit, 1, 50);
+        var normalizedQuery = NormalizeQuery(query);
+        lock (_cacheLock)
+        {
+            if (_searchCache.TryGetValue(normalizedQuery, out var cached)
+                && DateTimeOffset.UtcNow - cached.CreatedAt <= SearchCacheLifetime
+                && cached.RequestedLimit >= safeLimit)
+            {
+                cached.LastAccessedAt = DateTimeOffset.UtcNow;
+                return cached.Tracks.Take(safeLimit).ToArray();
+            }
+
+            if (cached is not null && DateTimeOffset.UtcNow - cached.CreatedAt > SearchCacheLifetime)
+            {
+                _searchCache.Remove(normalizedQuery);
+            }
+        }
+
         var arguments = new[]
         {
             "--ignore-config",
@@ -63,11 +88,37 @@ public sealed class YtDlpClient
             throw new InvalidOperationException(CleanError(result.StandardError, "YouTube search failed."));
         }
 
-        return ParseSearchResponse(result.StandardOutput);
+        var tracks = ParseSearchResponse(result.StandardOutput).ToArray();
+        lock (_cacheLock)
+        {
+            _searchCache[normalizedQuery] = new SearchCacheEntry(
+                safeLimit,
+                tracks,
+                DateTimeOffset.UtcNow);
+            TrimOldest(_searchCache, SearchCacheCapacity, entry => entry.LastAccessedAt);
+        }
+
+        return tracks;
     }
 
     public async Task<string> ResolveAudioUrlAsync(Track track, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_cacheLock)
+        {
+            if (_audioUrlCache.TryGetValue(track.Id, out var cached)
+                && DateTimeOffset.UtcNow - cached.CreatedAt <= AudioUrlCacheLifetime)
+            {
+                cached.LastAccessedAt = DateTimeOffset.UtcNow;
+                return cached.Url;
+            }
+
+            if (cached is not null)
+            {
+                _audioUrlCache.Remove(track.Id);
+            }
+        }
+
         var arguments = new[]
         {
             "--ignore-config",
@@ -97,7 +148,26 @@ public sealed class YtDlpClient
             .FirstOrDefault(line => Uri.TryCreate(line, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp));
 
-        return url ?? throw new InvalidOperationException("yt-dlp did not return a playable audio URL.");
+        if (url is null)
+        {
+            throw new InvalidOperationException("yt-dlp did not return a playable audio URL.");
+        }
+
+        lock (_cacheLock)
+        {
+            _audioUrlCache[track.Id] = new AudioUrlCacheEntry(url, DateTimeOffset.UtcNow);
+            TrimOldest(_audioUrlCache, AudioUrlCacheCapacity, entry => entry.LastAccessedAt);
+        }
+
+        return url;
+    }
+
+    public void InvalidateAudioUrl(string trackId)
+    {
+        lock (_cacheLock)
+        {
+            _audioUrlCache.Remove(trackId);
+        }
     }
 
     public async Task<Track> GetTrackAsync(string url, CancellationToken cancellationToken)
@@ -216,5 +286,44 @@ public sealed class YtDlpClient
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .LastOrDefault();
         return string.IsNullOrWhiteSpace(message) ? fallback : message;
+    }
+
+    private static string NormalizeQuery(string query) =>
+        string.Join(' ', query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .ToUpperInvariant();
+
+    private static void TrimOldest<TEntry>(
+        Dictionary<string, TEntry> cache,
+        int capacity,
+        Func<TEntry, DateTimeOffset> getLastAccessedAt)
+    {
+        while (cache.Count > capacity)
+        {
+            var oldestKey = cache.MinBy(item => getLastAccessedAt(item.Value)).Key;
+            cache.Remove(oldestKey);
+        }
+    }
+
+    private sealed class SearchCacheEntry(
+        int requestedLimit,
+        IReadOnlyList<Track> tracks,
+        DateTimeOffset createdAt)
+    {
+        public int RequestedLimit { get; } = requestedLimit;
+
+        public IReadOnlyList<Track> Tracks { get; } = tracks;
+
+        public DateTimeOffset CreatedAt { get; } = createdAt;
+
+        public DateTimeOffset LastAccessedAt { get; set; } = createdAt;
+    }
+
+    private sealed class AudioUrlCacheEntry(string url, DateTimeOffset createdAt)
+    {
+        public string Url { get; } = url;
+
+        public DateTimeOffset CreatedAt { get; } = createdAt;
+
+        public DateTimeOffset LastAccessedAt { get; set; } = createdAt;
     }
 }

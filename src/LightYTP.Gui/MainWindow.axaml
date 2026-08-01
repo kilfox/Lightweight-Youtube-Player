@@ -1,0 +1,208 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="using:YtMusicTerminal.Models"
+        x:Class="LightYTP.Gui.MainWindow"
+        Title="LightYTP GUI"
+        Width="620"
+        Height="520"
+        MinWidth="520"
+        MinHeight="440"
+        CanResize="True"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        Background="#11140F"
+        KeyDown="OnWindowKeyDown">
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="#C8D3B0" />
+      <Setter Property="FontFamily" Value="Consolas" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="Background" Value="#30382B" />
+      <Setter Property="Foreground" Value="#E6EED5" />
+      <Setter Property="BorderBrush" Value="#667458" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#46543A" />
+    </Style>
+    <Style Selector="Button.transport">
+      <Setter Property="MinWidth" Value="52" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Padding" Value="8,7" />
+    </Style>
+    <Style Selector="Button.window">
+      <Setter Property="MinWidth" Value="34" />
+      <Setter Property="Padding" Value="5,2" />
+      <Setter Property="Background" Value="#252B21" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="#090B08" />
+      <Setter Property="Foreground" Value="#D7E7B5" />
+      <Setter Property="BorderBrush" Value="#667458" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="CaretBrush" Value="#A9E64A" />
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="#090B08" />
+      <Setter Property="BorderBrush" Value="#4D5943" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="FontFamily" Value="Consolas" />
+    </Style>
+    <Style Selector="TabControl">
+      <Setter Property="Background" Value="#161B14" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="Foreground" Value="#D7E7B5" />
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Slider">
+      <Setter Property="Foreground" Value="#A9E64A" />
+    </Style>
+  </Window.Styles>
+
+  <Border BorderBrush="#879874" BorderThickness="2" Background="#11140F">
+    <Grid RowDefinitions="34,150,*">
+      <Border Grid.Row="0" Background="#252B21">
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <Border Grid.Column="0" Background="Transparent" PointerPressed="OnTitlePointerPressed">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+              <TextBlock Text="LIGHTYTP" Foreground="#A9E64A" FontWeight="Bold" FontSize="15" />
+              <TextBlock Text="  //  LIGHTWEIGHT PLAYER BY KH" Foreground="#879874" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Border>
+          <Button Grid.Column="1" Classes="window" Content="_" Click="OnMinimizeClick" />
+          <Button Grid.Column="2" Classes="window" Content="X" Click="OnCloseClick" />
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="1" Margin="8" Padding="10" Background="#090B08" BorderBrush="#4D5943" BorderThickness="1">
+        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,155">
+          <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Spacing="2">
+            <TextBlock x:Name="NowPlayingText" Text="Ready" Foreground="#A9E64A" FontSize="16" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="ArtistText" Text="Search for a track to begin" Foreground="#879874" FontSize="12" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+
+          <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,5" ColumnDefinitions="Auto,*,Auto">
+            <TextBlock x:Name="PositionText" Grid.Column="0" Text="00:00" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <Slider x:Name="PositionSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="0" PointerReleased="OnPositionReleased" />
+            <TextBlock x:Name="DurationText" Grid.Column="2" Text="00:00" VerticalAlignment="Center" Margin="8,0,0,0" />
+          </Grid>
+
+          <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Spacing="5">
+            <Button Classes="transport" Content="|&lt;" ToolTip.Tip="Previous (P)" Click="OnPreviousClick" />
+            <Button Classes="transport" Content="▶/Ⅱ" ToolTip.Tip="Play or pause (Space)" Click="OnTogglePauseClick" />
+            <Button Classes="transport" Content="■" ToolTip.Tip="Stop (S)" Click="OnStopClick" />
+            <Button Classes="transport" Content="&gt;|" ToolTip.Tip="Next (N)" Click="OnNextClick" />
+            <Button Classes="transport" Content="♥" ToolTip.Tip="Toggle favorite" Click="OnToggleFavoriteClick" />
+          </StackPanel>
+
+          <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*" Margin="10,0,0,0">
+            <TextBlock Grid.Column="0" Text="VOL" Foreground="#A9E64A" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <Slider x:Name="VolumeSlider" Grid.Column="1" Minimum="0" Maximum="100" Value="70" ValueChanged="OnVolumeChanged" />
+          </Grid>
+        </Grid>
+      </Border>
+
+      <Grid Grid.Row="2" Margin="8,0,8,8" RowDefinitions="*,26">
+        <TabControl x:Name="LibraryTabs" Grid.Row="0">
+          <TabItem Header="SEARCH">
+            <Grid Margin="8" RowDefinitions="Auto,*,Auto">
+              <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,7">
+                <TextBox x:Name="SearchBox" Grid.Column="0" PlaceholderText="Song, artist, or YouTube URL" KeyDown="OnSearchBoxKeyDown" />
+                <Button Grid.Column="1" Content="SEARCH" Margin="6,0,0,0" Click="OnSearchClick" />
+              </Grid>
+              <ListBox x:Name="SearchResultsList" Grid.Row="1" DoubleTapped="OnSearchResultDoubleTapped">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="models:Track">
+                    <Grid ColumnDefinitions="*,Auto" Margin="5,3">
+                      <StackPanel Grid.Column="0">
+                        <TextBlock Text="{Binding Title}" Foreground="#D7E7B5" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Artist}" Foreground="#718064" FontSize="11" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="1" Text="{Binding Duration}" Foreground="#718064" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Margin="0,7,0,0">
+                <Button Content="PLAY" Click="OnPlaySearchClick" />
+                <Button Content="ADD TO QUEUE" Click="OnAddSearchToQueueClick" />
+                <Button Content="LOAD 10 MORE" Click="OnLoadMoreClick" />
+              </StackPanel>
+            </Grid>
+          </TabItem>
+
+          <TabItem Header="QUEUE">
+            <Grid Margin="8" RowDefinitions="*,Auto">
+              <ListBox x:Name="QueueList" Grid.Row="0" DoubleTapped="OnQueueDoubleTapped">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="models:Track">
+                    <StackPanel Margin="5,3">
+                      <TextBlock Text="{Binding Title}" Foreground="#D7E7B5" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Artist}" Foreground="#718064" FontSize="11" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,7,0,0">
+                <Button Content="PLAY" Click="OnPlayQueueClick" />
+                <Button Content="REMOVE" Click="OnRemoveQueueClick" />
+                <Button Content="CLEAR" Click="OnClearQueueClick" />
+              </StackPanel>
+            </Grid>
+          </TabItem>
+
+          <TabItem Header="HISTORY">
+            <Grid Margin="8" RowDefinitions="*,Auto">
+              <ListBox x:Name="HistoryList" Grid.Row="0" DoubleTapped="OnHistoryDoubleTapped">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="models:Track">
+                    <StackPanel Margin="5,3">
+                      <TextBlock Text="{Binding Title}" Foreground="#D7E7B5" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Artist}" Foreground="#718064" FontSize="11" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,7,0,0">
+                <Button Content="PLAY" Click="OnPlayHistoryClick" />
+                <Button Content="ADD TO QUEUE" Click="OnAddHistoryToQueueClick" />
+              </StackPanel>
+            </Grid>
+          </TabItem>
+
+          <TabItem Header="FAVORITES">
+            <Grid Margin="8" RowDefinitions="*,Auto">
+              <ListBox x:Name="FavoritesList" Grid.Row="0" DoubleTapped="OnFavoriteDoubleTapped">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="models:Track">
+                    <StackPanel Margin="5,3">
+                      <TextBlock Text="{Binding Title}" Foreground="#D7E7B5" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Artist}" Foreground="#718064" FontSize="11" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,7,0,0">
+                <Button Content="PLAY" Click="OnPlayFavoriteClick" />
+                <Button Content="REMOVE" Click="OnRemoveFavoriteClick" />
+              </StackPanel>
+            </Grid>
+          </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="2,4,2,0">
+          <TextBlock x:Name="StatusText" Grid.Column="0" Text="Starting..." Foreground="#879874" FontSize="11" TextTrimming="CharacterEllipsis" />
+          <TextBlock Grid.Column="1" Text="CTRL+F SEARCH  •  SPACE PLAY/PAUSE  •  CTRL+Q QUIT" Foreground="#596650" FontSize="10" />
+        </Grid>
+      </Grid>
+    </Grid>
+  </Border>
+</Window>

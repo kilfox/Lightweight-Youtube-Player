@@ -39,6 +39,8 @@ public sealed class MpvClient : IAsyncDisposable
 
     public event Action<string>? PlaybackFailed;
 
+    public event Action<PlaybackSnapshot>? SnapshotChanged;
+
     public PlaybackSnapshot Snapshot
     {
         get
@@ -561,9 +563,21 @@ public sealed class MpvClient : IAsyncDisposable
 
     private void UpdateSnapshot(Func<PlaybackSnapshot, PlaybackSnapshot> update)
     {
+        PlaybackSnapshot previous;
+        PlaybackSnapshot current;
         lock (_snapshotLock)
         {
-            _snapshot = update(_snapshot);
+            previous = _snapshot;
+            current = update(previous);
+            _snapshot = current;
+        }
+
+        if (previous.State != current.State
+            || previous.Volume != current.Volume
+            || previous.Duration != current.Duration
+            || previous.Error != current.Error)
+        {
+            SnapshotChanged?.Invoke(current);
         }
     }
 

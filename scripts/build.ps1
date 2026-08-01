@@ -8,7 +8,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$solution = Join-Path $repositoryRoot 'YtMusicTerminal.slnx'
 $project = Join-Path $repositoryRoot 'src\YtMusicTerminal\YtMusicTerminal.csproj'
 $testProject = Join-Path $repositoryRoot 'tests\YtMusicTerminal.Tests\YtMusicTerminal.Tests.csproj'
 $output = Join-Path $repositoryRoot "artifacts\$Runtime"
@@ -26,7 +25,7 @@ if ([string]::IsNullOrWhiteSpace($dotnet)) {
 
 Push-Location $repositoryRoot
 try {
-    & $dotnet build $solution -c Release
+    & $dotnet build $testProject -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 
     if (-not $SkipTests) {
@@ -67,6 +66,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'README.md') -Destination $resolvedOutput -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'MANUAL.md') -Destination $resolvedOutput -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'HOTKEYS.md') -Destination $resolvedOutput -Force
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'GUI_MANUAL.md') -Destination $resolvedOutput -Force
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'GUI_HOTKEYS.md') -Destination $resolvedOutput -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') -Destination $resolvedOutput -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'THIRD_PARTY_NOTICES.md') -Destination $resolvedOutput -Force
     if ($Runtime -eq 'win-x64') {
