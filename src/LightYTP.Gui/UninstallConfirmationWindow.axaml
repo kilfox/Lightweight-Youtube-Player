@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LightYTP.Gui.UninstallConfirmationWindow"
+        Title="Uninstall LightYTP GUI"
+        Icon="/Assets/lightytp.ico"
+        Width="430"
+        Height="190"
+        CanResize="False"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterOwner"
+        Background="#11140F">
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="#C8D3B0" />
+      <Setter Property="FontFamily" Value="Consolas" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="Background" Value="#30382B" />
+      <Setter Property="Foreground" Value="#E6EED5" />
+      <Setter Property="BorderBrush" Value="#667458" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#46543A" />
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#58302C" />
+      <Setter Property="BorderBrush" Value="#A65D50" />
+    </Style>
+  </Window.Styles>
+
+  <Border BorderBrush="#879874" BorderThickness="2" Padding="18" Background="#11140F">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+      <TextBlock Grid.Row="0" Text="UNINSTALL LIGHTYTP GUI?" Foreground="#E8A195" FontSize="16" FontWeight="Bold" />
+      <TextBlock Grid.Row="1" Margin="0,10,0,0" Text="The application, launcher, and shortcut will be removed." TextWrapping="Wrap" />
+      <TextBlock Grid.Row="2" Margin="0,5,0,0" Text="Favorites, history, queue, and settings will be kept." Foreground="#879874" TextWrapping="Wrap" />
+      <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+        <Button Content="CANCEL" Click="OnCancelClick" />
+        <Button Classes="danger" Content="UNINSTALL" Click="OnUninstallClick" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</Window>

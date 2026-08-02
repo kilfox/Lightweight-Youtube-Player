@@ -58,6 +58,9 @@ try {
     if ($Runtime.StartsWith('osx-', [StringComparison]::Ordinal)) {
         $contentsDirectory = Split-Path -Parent $publishOutput
         Copy-Item -LiteralPath (Join-Path $repositoryRoot 'packaging\macos\Info.plist') -Destination $contentsDirectory -Force
+        $resourcesDirectory = Join-Path $contentsDirectory 'Resources'
+        New-Item -ItemType Directory -Path $resourcesDirectory -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot 'packaging\macos\lightytp.icns') -Destination $resourcesDirectory -Force
     }
 
     foreach ($documentName in @('README.md', 'GUI_MANUAL.md', 'GUI_HOTKEYS.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
@@ -84,6 +87,9 @@ try {
     }
     else {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts\install-gui.sh') -Destination (Join-Path $resolvedOutput 'install.sh') -Force
+        if ($Runtime.StartsWith('linux-', [StringComparison]::Ordinal)) {
+            Copy-Item -LiteralPath (Join-Path $repositoryRoot 'src\LightYTP.Gui\Assets\lightytp.png') -Destination $resolvedOutput -Force
+        }
     }
 
     Write-Host "Published LightYTP GUI to $resolvedOutput"

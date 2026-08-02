@@ -35,7 +35,7 @@ internal static class Program
         catch (ArgumentException exception)
         {
             Console.Error.WriteLine(exception.Message);
-            Console.Error.WriteLine("Run ytmusic --help for usage.");
+            Console.Error.WriteLine("Run lightytp --help for usage.");
             return 2;
         }
 
@@ -54,6 +54,11 @@ internal static class Program
         if (options.UpdateTools)
         {
             return await UpdateToolsAsync().ConfigureAwait(false);
+        }
+
+        if (options.Uninstall)
+        {
+            return Uninstall(options.AssumeYes);
         }
 
         var appPaths = AppPaths.CreateDefault();
@@ -326,14 +331,58 @@ internal static class Program
         return 0;
     }
 
+    private static int Uninstall(bool assumeYes)
+    {
+        if (!UninstallService.TryCreateDefaultPlan(
+                LightYtpEdition.Terminal,
+                out var plan,
+                out var error))
+        {
+            Console.Error.WriteLine(error);
+            return 2;
+        }
+
+        if (!assumeYes)
+        {
+            if (Console.IsInputRedirected)
+            {
+                Console.Error.WriteLine("Confirmation requires an interactive terminal. Use 'lightytp uninstall --yes' instead.");
+                return 2;
+            }
+
+            Console.Write($"Uninstall LightYTP Terminal from {plan!.TargetPath}? [y/N] ");
+            var response = Console.ReadLine();
+            if (!string.Equals(response?.Trim(), "y", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(response?.Trim(), "yes", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Uninstall cancelled.");
+                return 0;
+            }
+        }
+
+        try
+        {
+            UninstallService.Schedule(plan!);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Could not start the uninstaller: {exception.Message}");
+            return 2;
+        }
+
+        Console.WriteLine("LightYTP Terminal will be removed after this command exits.");
+        Console.WriteLine("Favorites, history, queue, and settings are kept for future reinstalls.");
+        return 0;
+    }
+
     private static void PrintHelp()
     {
         Console.WriteLine(
             """
-            ytmusic - lightweight terminal YouTube music player
+            lightytp - lightweight terminal YouTube music player
 
             Usage:
-              ytmusic [options] [search query or YouTube URL]
+              lightytp [options] [search query or YouTube URL]
 
             Options:
               --yt-dlp <path>  Path to yt-dlp executable
@@ -341,6 +390,8 @@ internal static class Program
               --diagnose       Print dependency versions and paths
               --smoke-test     Search and start muted playback, then print memory use
               update           Update yt-dlp, mpv, and Deno, then exit
+              uninstall        Uninstall the terminal edition
+              uninstall --yes  Uninstall without a confirmation prompt
               --version        Print application version
               -h, --help       Show this help
 
@@ -401,6 +452,8 @@ internal static class Program
         bool Diagnose,
         bool SmokeTest,
         bool UpdateTools,
+        bool Uninstall,
+        bool AssumeYes,
         string? YtDlpPath,
         string? MpvPath,
         string? StartupInput)
@@ -412,6 +465,8 @@ internal static class Program
             var diagnose = false;
             var smokeTest = false;
             var updateTools = false;
+            var uninstall = false;
+            var assumeYes = false;
             string? ytDlp = null;
             string? mpv = null;
             var startupInput = new List<string>();
@@ -436,6 +491,13 @@ internal static class Program
                     case "update":
                         updateTools = true;
                         break;
+                    case "uninstall":
+                        uninstall = true;
+                        break;
+                    case "-y":
+                    case "--yes":
+                        assumeYes = true;
+                        break;
                     case "--yt-dlp":
                         ytDlp = ReadValue(args, ref index, "--yt-dlp");
                         break;
@@ -453,12 +515,29 @@ internal static class Program
                 }
             }
 
+            if (updateTools && uninstall)
+            {
+                throw new ArgumentException("Choose either 'update' or 'uninstall', not both.");
+            }
+
+            if ((updateTools || uninstall) && startupInput.Count > 0)
+            {
+                throw new ArgumentException("Commands cannot be combined with a search or URL.");
+            }
+
+            if (assumeYes && !uninstall)
+            {
+                throw new ArgumentException("Option '--yes' can only be used with 'uninstall'.");
+            }
+
             return new CliOptions(
                 help,
                 version,
                 diagnose,
                 smokeTest,
                 updateTools,
+                uninstall,
+                assumeYes,
                 ytDlp,
                 mpv,
                 startupInput.Count == 0 ? null : string.Join(' ', startupInput));

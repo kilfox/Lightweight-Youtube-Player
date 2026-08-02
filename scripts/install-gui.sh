@@ -64,6 +64,7 @@ else
         'Name=LightYTP GUI' \
         'Comment=Lightweight audio-only YouTube player' \
         "Exec=\"$binary_directory/lightytp-gui\"" \
+        "Icon=$binary_directory/lightytp.png" \
         'Terminal=false' \
         'Categories=AudioVideo;Audio;Player;' > "$desktop_path"
     chmod +x "$desktop_path"

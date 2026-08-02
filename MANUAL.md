@@ -94,6 +94,14 @@ lightytp update
 
 Windows updates its bundled tools. macOS and Linux display the appropriate package-manager guidance.
 
+To uninstall the terminal edition, run:
+
+```shell
+lightytp uninstall
+```
+
+Confirm when prompted. For unattended use, run `lightytp uninstall --yes`. The command removes the installed player and its launcher or PATH entry, but keeps favorites, history, queue, and settings for future reinstalls. Portable copies that were not installed with the standard installer must be removed manually.
+
 ## 5. Interface overview
 
 The interface contains four selectable panes and a player area:

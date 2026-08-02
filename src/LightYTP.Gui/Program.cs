@@ -21,5 +21,5 @@ internal static class Program
             .UsePlatformDetect();
 
     private static string Version =>
-        typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.3.0";
+        typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.4.0";
 }

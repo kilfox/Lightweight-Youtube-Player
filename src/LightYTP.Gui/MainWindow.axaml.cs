@@ -800,6 +800,39 @@ public sealed partial class MainWindow : Window
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
 
+    private async void OnUninstallClick(object? sender, RoutedEventArgs e)
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        if (!UninstallService.TryCreateDefaultPlan(LightYtpEdition.Gui, out var plan, out var error))
+        {
+            SetStatus(error);
+            return;
+        }
+
+        var confirmed = await new UninstallConfirmationWindow().ShowDialog<bool>(this);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            UninstallService.Schedule(plan!);
+        }
+        catch (Exception exception)
+        {
+            SetStatus($"Could not start the uninstaller: {exception.Message}");
+            return;
+        }
+
+        SetStatus("Uninstalling after the player closes...");
+        Close();
+    }
+
     private void SetStatus(string message) => StatusText.Text = message;
 
     private YtDlpClient RequireYoutube() =>

@@ -87,6 +87,12 @@ Both editions use the same settings, history, queue, favorites, and resume data:
 
 Avoid running both editions simultaneously because the most recently closed edition writes the final queue and settings state.
 
+## Uninstall
+
+Click **UNINSTALL** at the bottom of the GUI, review the confirmation, and click **UNINSTALL** again. LightYTP stops playback before removing the GUI application, command launcher, and Windows Start menu or Linux application-menu entry.
+
+The terminal edition is not removed. Favorites, history, queue, and settings are also kept so they remain available to the terminal edition or a future reinstall. Portable GUI copies that were not installed with the standard installer must be removed manually.
+
 ## Resource usage
 
 The GUI has no browser engine, WebView, Electron runtime, video decoder, or video window. The measured Windows x64 GUI executable is approximately 21 MiB. Its settled idle working set is about 146 MiB plus 25 MiB for idle mpv; playback usage varies. Use the terminal edition when the smallest possible memory footprint is more important than mouse controls.
