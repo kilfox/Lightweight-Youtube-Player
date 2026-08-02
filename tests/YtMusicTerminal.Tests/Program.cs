@@ -14,6 +14,7 @@ internal static class Program
             ("Caches searches and resolved audio URLs", YtDlpCacheAsync),
             ("Renders the terminal layout", RenderLayoutAsync),
             ("Formats playback duration", FormatDurationAsync),
+            ("Builds safe edition-specific uninstall plans", UninstallPlansAsync),
             ("Deduplicates bounded history newest-first", HistoryStoreAsync),
             ("Persists queue, favorites, and resume state", LibraryStoreAsync)
         };
@@ -139,6 +140,51 @@ internal static class Program
         Equal("00:05", TerminalFrameRenderer.FormatTime(TimeSpan.FromSeconds(5)));
         Equal("03:07", TerminalFrameRenderer.FormatTime(TimeSpan.FromSeconds(187)));
         Equal("1:02:03", TerminalFrameRenderer.FormatTime(TimeSpan.FromSeconds(3723)));
+        return Task.CompletedTask;
+    }
+
+    private static Task UninstallPlansAsync()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var roamingAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var platform = OperatingSystem.IsWindows()
+            ? UninstallPlatform.Windows
+            : OperatingSystem.IsMacOS()
+                ? UninstallPlatform.MacOS
+                : UninstallPlatform.Linux;
+
+        var terminal = UninstallService.CreateExpectedPlan(
+            LightYtpEdition.Terminal,
+            platform,
+            home,
+            localAppData,
+            roamingAppData);
+        var gui = UninstallService.CreateExpectedPlan(
+            LightYtpEdition.Gui,
+            platform,
+            home,
+            localAppData,
+            roamingAppData);
+
+        Equal("LightYTP Terminal", terminal.DisplayName);
+        Equal("LightYTP GUI", gui.DisplayName);
+        Equal(false, string.Equals(terminal.TargetPath, gui.TargetPath, StringComparison.OrdinalIgnoreCase));
+
+        if (OperatingSystem.IsWindows())
+        {
+            Equal(Path.Combine(localAppData, "Programs", "LightYTP"), terminal.TargetPath);
+            Equal(Path.Combine(localAppData, "Programs", "LightYTP-GUI"), gui.TargetPath);
+            Equal(Path.Combine(roamingAppData, "Microsoft", "Windows", "Start Menu", "Programs", "LightYTP GUI.lnk"), gui.ShortcutPath);
+            Equal(true, terminal.TargetIsDirectory);
+        }
+        else
+        {
+            Equal(Path.Combine(home, ".local", "bin", "lightytp"), terminal.TargetPath);
+            Equal(false, terminal.TargetIsDirectory);
+            Equal(Path.Combine(home, ".local", "bin", "lightytp-gui"), gui.LauncherPath);
+        }
+
         return Task.CompletedTask;
     }
 

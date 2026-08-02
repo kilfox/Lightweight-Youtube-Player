@@ -4,7 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>lightytp-gui</AssemblyName>
     <RootNamespace>LightYTP.Gui</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
+    <ApplicationIcon>Assets/lightytp.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <WarningsNotAsErrors>$(WarningsNotAsErrors);IL2104</WarningsNotAsErrors>
     <StripSymbols>true</StripSymbols>
@@ -17,5 +18,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../YtMusicTerminal/YtMusicTerminal.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/lightytp.ico" />
+    <AvaloniaResource Include="Assets/lightytp.png" />
   </ItemGroup>
 </Project>

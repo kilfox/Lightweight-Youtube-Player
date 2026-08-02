@@ -49,9 +49,14 @@ rm -f -- "$publish_output/ytmusic.runtimeconfig.json"
 case "$runtime" in
     osx-*)
         cp "$repository_root/packaging/macos/Info.plist" "$output/LightYTP GUI.app/Contents/Info.plist"
+        mkdir -p "$output/LightYTP GUI.app/Contents/Resources"
+        cp "$repository_root/packaging/macos/lightytp.icns" "$output/LightYTP GUI.app/Contents/Resources/lightytp.icns"
         chmod +x "$publish_output/lightytp-gui"
         ;;
-    *) chmod +x "$publish_output/lightytp-gui" ;;
+    *)
+        cp "$repository_root/src/LightYTP.Gui/Assets/lightytp.png" "$output/lightytp.png"
+        chmod +x "$publish_output/lightytp-gui"
+        ;;
 esac
 
 for document in README.md GUI_MANUAL.md GUI_HOTKEYS.md LICENSE THIRD_PARTY_NOTICES.md; do

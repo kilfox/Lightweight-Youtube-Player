@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">LightYTP application icon</title>
+  <desc id="description">A lime terminal prompt beside a musical note with a feather-shaped flag.</desc>
+  <rect x="48" y="48" width="928" height="928" rx="190" fill="#11140f" stroke="#879874" stroke-width="48" />
+  <path d="M250 315L460 512 250 709" fill="none" stroke="#a9e64a" stroke-width="86" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M700 690V320" fill="none" stroke="#a9e64a" stroke-width="72" stroke-linecap="round" />
+  <ellipse cx="640" cy="712" rx="94" ry="67" transform="rotate(-15 640 712)" fill="#a9e64a" />
+  <path d="M700 305C792 294 866 340 853 414C843 468 792 505 742 525C774 464 771 405 700 388Z" fill="#a9e64a" />
+  <path d="M731 350C770 360 805 381 826 411" fill="none" stroke="#11140f" stroke-width="24" stroke-linecap="round" />
+</svg>

@@ -46,6 +46,7 @@ $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = Join-Path $resolvedInstallDirectory 'lightytp-gui.exe'
 $shortcut.WorkingDirectory = $resolvedInstallDirectory
 $shortcut.Description = 'LightYTP lightweight music player'
+$shortcut.IconLocation = "$(Join-Path $resolvedInstallDirectory 'lightytp-gui.exe'),0"
 $shortcut.Save()
 
 Write-Host "Installed LightYTP GUI to $resolvedInstallDirectory"

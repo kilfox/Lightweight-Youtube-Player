@@ -3,6 +3,7 @@
         xmlns:models="using:YtMusicTerminal.Models"
         x:Class="LightYTP.Gui.MainWindow"
         Title="LightYTP GUI"
+        Icon="/Assets/lightytp.ico"
         Width="620"
         Height="520"
         MinWidth="520"
@@ -40,6 +41,13 @@
       <Setter Property="Padding" Value="5,2" />
       <Setter Property="Background" Value="#252B21" />
     </Style>
+    <Style Selector="Button.uninstall">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#9A675F" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="FontSize" Value="9" />
+    </Style>
     <Style Selector="TextBox">
       <Setter Property="Background" Value="#090B08" />
       <Setter Property="Foreground" Value="#D7E7B5" />
@@ -73,6 +81,7 @@
         <Grid ColumnDefinitions="*,Auto,Auto">
           <Border Grid.Column="0" Background="Transparent" PointerPressed="OnTitlePointerPressed">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+              <Image Source="/Assets/lightytp.png" Width="20" Height="20" Margin="0,0,7,0" />
               <TextBlock Text="LIGHTYTP" Foreground="#A9E64A" FontWeight="Bold" FontSize="15" />
               <TextBlock Text="  //  LIGHTWEIGHT PLAYER BY KH" Foreground="#879874" FontSize="11" VerticalAlignment="Center" />
             </StackPanel>
@@ -198,9 +207,10 @@
           </TabItem>
         </TabControl>
 
-        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="2,4,2,0">
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="2,4,2,0">
           <TextBlock x:Name="StatusText" Grid.Column="0" Text="Starting..." Foreground="#879874" FontSize="11" TextTrimming="CharacterEllipsis" />
-          <TextBlock Grid.Column="1" Text="CTRL+F SEARCH  •  SPACE PLAY/PAUSE  •  CTRL+Q QUIT" Foreground="#596650" FontSize="10" />
+          <Button Grid.Column="1" Classes="uninstall" Content="UNINSTALL" ToolTip.Tip="Remove LightYTP GUI" Click="OnUninstallClick" />
+          <TextBlock Grid.Column="2" Text="CTRL+F SEARCH  •  SPACE PLAY/PAUSE  •  CTRL+Q QUIT" Foreground="#596650" FontSize="10" VerticalAlignment="Center" />
         </Grid>
       </Grid>
     </Grid>

@@ -136,6 +136,16 @@ Run a muted end-to-end playback check and print the combined application/mpv wor
 lightytp --smoke-test
 ```
 
+## Uninstall
+
+Remove the terminal edition from a terminal:
+
+```shell
+lightytp uninstall
+```
+
+To remove the GUI edition, open LightYTP GUI and click **UNINSTALL** at the bottom of the window. Both actions ask for confirmation, remove only the selected edition, and keep favorites, history, queue, and settings in case you reinstall later.
+
 ## Terminal keyboard controls
 
 | Key | Action |
