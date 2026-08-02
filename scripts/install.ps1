@@ -35,7 +35,7 @@ foreach ($toolName in @('yt-dlp.exe', 'deno.exe', 'mpv.exe')) {
     Copy-Item -LiteralPath (Join-Path $sourceDirectory "tools\$toolName") -Destination (Join-Path $toolDirectory $toolName) -Force
 }
 
-foreach ($documentName in @('README.md', 'MANUAL.md', 'HOTKEYS.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
+foreach ($documentName in @('README.md', 'MANUAL.md', 'HOTKEYS.md', 'GUI_MANUAL.md', 'GUI_HOTKEYS.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
     $document = Join-Path $sourceDirectory $documentName
     if (Test-Path -LiteralPath $document) {
         Copy-Item -LiteralPath $document -Destination $resolvedInstallDirectory -Force

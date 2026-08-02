@@ -2,8 +2,7 @@
 set -eu
 
 repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-project="$repository_root/src/YtMusicTerminal/YtMusicTerminal.csproj"
-tests="$repository_root/tests/YtMusicTerminal.Tests/YtMusicTerminal.Tests.csproj"
+project="$repository_root/src/LightYTP.Gui/LightYTP.Gui.csproj"
 
 if [ "$#" -gt 0 ]; then
     runtime=$1
@@ -23,29 +22,42 @@ case "$runtime" in
     *) echo "Unsupported runtime: $runtime" >&2; exit 2 ;;
 esac
 
-output="$repository_root/artifacts/$runtime"
-
+output="$repository_root/artifacts/gui-$runtime"
 case "$output" in
     "$repository_root/artifacts/"*) rm -rf -- "$output" ;;
     *) echo "Refusing to replace an output directory outside the repository artifacts directory." >&2; exit 2 ;;
 esac
 
-dotnet build "$tests" -c Release
-dotnet run --project "$tests" -c Release --no-build
+publish_output=$output
+case "$runtime" in
+    osx-*) publish_output="$output/LightYTP GUI.app/Contents/MacOS" ;;
+esac
+
 dotnet publish "$project" \
     -c Release \
     -r "$runtime" \
     --self-contained true \
-    -o "$output" \
+    -o "$publish_output" \
     -p:PublishSingleFile=true \
     -p:PublishTrimmed=true \
-    -p:TrimMode=full \
-    -p:EnableCompressionInSingleFile=true
+    -p:TrimMode=partial \
+    -p:EnableCompressionInSingleFile=true \
+    -p:IncludeNativeLibrariesForSelfExtract=true
+rm -f -- "$publish_output"/*.pdb
+rm -f -- "$publish_output/ytmusic.runtimeconfig.json"
 
-for document in README.md MANUAL.md HOTKEYS.md GUI_MANUAL.md GUI_HOTKEYS.md LICENSE THIRD_PARTY_NOTICES.md; do
+case "$runtime" in
+    osx-*)
+        cp "$repository_root/packaging/macos/Info.plist" "$output/LightYTP GUI.app/Contents/Info.plist"
+        chmod +x "$publish_output/lightytp-gui"
+        ;;
+    *) chmod +x "$publish_output/lightytp-gui" ;;
+esac
+
+for document in README.md GUI_MANUAL.md GUI_HOTKEYS.md LICENSE THIRD_PARTY_NOTICES.md; do
     cp "$repository_root/$document" "$output/$document"
 done
-cp "$repository_root/scripts/install.sh" "$output/install.sh"
-chmod +x "$output/ytmusic" "$output/install.sh"
+cp "$repository_root/scripts/install-gui.sh" "$output/install.sh"
+chmod +x "$output/install.sh"
 
-echo "Published to $output"
+echo "Published LightYTP GUI to $output"

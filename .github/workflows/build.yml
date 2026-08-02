@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   build:
+    name: build (${{ matrix.runner }}, ${{ matrix.runtime }}, ${{ matrix.archive }})
     strategy:
       fail-fast: false
       matrix:
@@ -18,18 +19,23 @@ jobs:
           - runner: windows-latest
             runtime: win-x64
             archive: LightYTP-win-x64.zip
+            gui_archive: LightYTP-GUI-win-x64.zip
           - runner: ubuntu-latest
             runtime: linux-x64
             archive: LightYTP-linux-x64.tar.gz
+            gui_archive: LightYTP-GUI-linux-x64.tar.gz
           - runner: ubuntu-24.04-arm
             runtime: linux-arm64
             archive: LightYTP-linux-arm64.tar.gz
+            gui_archive: LightYTP-GUI-linux-arm64.tar.gz
           - runner: macos-15-intel
             runtime: osx-x64
             archive: LightYTP-macos-x64.tar.gz
+            gui_archive: LightYTP-GUI-macos-x64.tar.gz
           - runner: macos-15
             runtime: osx-arm64
             archive: LightYTP-macos-arm64.tar.gz
+            gui_archive: LightYTP-GUI-macos-arm64.tar.gz
 
     runs-on: ${{ matrix.runner }}
 
@@ -58,17 +64,21 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/build.ps1 -Runtime ${{ matrix.runtime }}
+          ./scripts/build-gui.ps1 -Runtime ${{ matrix.runtime }}
           $env:YTMUSIC_MPV = (Resolve-Path ./tools/mpv.exe)
           dotnet run --project ./tests/YtMusicTerminal.Tests/YtMusicTerminal.Tests.csproj -c Release --no-build -- --mpv
           Compress-Archive -Path ./artifacts/${{ matrix.runtime }}/* -DestinationPath ./artifacts/${{ matrix.archive }} -Force
+          Compress-Archive -Path ./artifacts/gui-${{ matrix.runtime }}/* -DestinationPath ./artifacts/${{ matrix.gui_archive }} -Force
 
       - name: Build and test Unix
         if: runner.os != 'Windows'
         shell: bash
         run: |
           bash ./scripts/build.sh ${{ matrix.runtime }}
+          bash ./scripts/build-gui.sh ${{ matrix.runtime }}
           dotnet run --project ./tests/YtMusicTerminal.Tests/YtMusicTerminal.Tests.csproj -c Release --no-build -- --mpv
           tar -C ./artifacts/${{ matrix.runtime }} -czf ./artifacts/${{ matrix.archive }} .
+          tar -C ./artifacts/gui-${{ matrix.runtime }} -czf ./artifacts/${{ matrix.gui_archive }} .
 
       - name: Verify published executable
         shell: bash
@@ -79,8 +89,21 @@ jobs:
             ./artifacts/${{ matrix.runtime }}/ytmusic --version
           fi
 
+      - name: Verify published GUI executable
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ./artifacts/gui-${{ matrix.runtime }}/lightytp-gui.exe --version
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            ./artifacts/gui-${{ matrix.runtime }}/LightYTP\ GUI.app/Contents/MacOS/lightytp-gui --version
+          else
+            ./artifacts/gui-${{ matrix.runtime }}/lightytp-gui --version
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.runtime }}
-          path: artifacts/${{ matrix.archive }}
+          path: |
+            artifacts/${{ matrix.archive }}
+            artifacts/${{ matrix.gui_archive }}
           if-no-files-found: error

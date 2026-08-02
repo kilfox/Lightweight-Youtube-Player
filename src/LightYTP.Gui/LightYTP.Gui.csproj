@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>lightytp-gui</AssemblyName>
+    <RootNamespace>LightYTP.Gui</RootNamespace>
+    <Version>0.3.0</Version>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);IL2104</WarningsNotAsErrors>
+    <StripSymbols>true</StripSymbols>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../YtMusicTerminal/YtMusicTerminal.csproj" />
+  </ItemGroup>
+</Project>

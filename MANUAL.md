@@ -1,4 +1,6 @@
-# LightYTP User Manual
+# LightYTP Terminal User Manual
+
+This manual covers the terminal edition. See [GUI_MANUAL.md](GUI_MANUAL.md) for the optional graphical edition.
 
 ## 1. What the program does
 
@@ -138,7 +140,7 @@ Queue controls:
 - `Delete`: remove the selected queue entry.
 - `Up` / `Down`: change the selected queue entry.
 
-When a queued track finishes normally, the next entry starts automatically. The queue is saved locally and restored the next time LightYTP starts.
+When a queued track finishes normally, the next entry starts automatically. LightYTP resolves only the next queued track after a short idle delay so normal queue transitions are faster without competing with searches. If that resolution is already running when you press `n`, LightYTP reuses it instead of starting another process. Search results and resolved stream URLs are kept in a small, time-limited memory cache that is cleared when LightYTP exits. The queue itself is saved locally and restored the next time LightYTP starts.
 
 Press `x` to toggle shuffle. Press `r` to cycle between repeat off, repeat track, and repeat queue.
 

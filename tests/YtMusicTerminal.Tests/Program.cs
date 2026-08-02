@@ -11,6 +11,7 @@ internal static class Program
         var tests = new List<(string Name, Func<Task> Run)>
         {
             ("Parses yt-dlp search output", ParseSearchOutputAsync),
+            ("Caches searches and resolved audio URLs", YtDlpCacheAsync),
             ("Renders the terminal layout", RenderLayoutAsync),
             ("Formats playback duration", FormatDurationAsync),
             ("Deduplicates bounded history newest-first", HistoryStoreAsync),
@@ -108,6 +109,31 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static async Task YtDlpCacheAsync()
+    {
+        var runner = new FakeProcessRunner();
+        var youtube = new YtDlpClient("yt-dlp", runner);
+
+        var firstSearch = await youtube.SearchAsync("  Test   Song ", 10, CancellationToken.None);
+        var cachedSearch = await youtube.SearchAsync("test song", 10, CancellationToken.None);
+        Equal(1, firstSearch.Count);
+        Equal(1, cachedSearch.Count);
+        Equal(1, runner.SearchCalls);
+
+        await youtube.SearchAsync("test song", 20, CancellationToken.None);
+        Equal(2, runner.SearchCalls);
+
+        var track = firstSearch[0];
+        var firstUrl = await youtube.ResolveAudioUrlAsync(track, CancellationToken.None);
+        var cachedUrl = await youtube.ResolveAudioUrlAsync(track, CancellationToken.None);
+        Equal(firstUrl, cachedUrl);
+        Equal(1, runner.ResolveCalls);
+
+        youtube.InvalidateAudioUrl(track.Id);
+        await youtube.ResolveAudioUrlAsync(track, CancellationToken.None);
+        Equal(2, runner.ResolveCalls);
+    }
+
     private static Task FormatDurationAsync()
     {
         Equal("00:05", TerminalFrameRenderer.FormatTime(TimeSpan.FromSeconds(5)));
@@ -199,6 +225,8 @@ internal static class Program
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using var mpv = new MpvClient(mpvPath, initialVolume: 20);
         await mpv.StartAsync(timeout.Token).ConfigureAwait(false);
+        var snapshotChanges = 0;
+        mpv.SnapshotChanged += _ => Interlocked.Increment(ref snapshotChanges);
         await mpv.SetVolumeAsync(35, timeout.Token).ConfigureAwait(false);
 
         while (mpv.Snapshot.Volume != 35)
@@ -208,6 +236,10 @@ internal static class Program
 
         Equal(PlaybackState.Idle, mpv.Snapshot.State);
         Equal(35, mpv.Snapshot.Volume);
+        if (Volatile.Read(ref snapshotChanges) == 0)
+        {
+            throw new InvalidOperationException("No discrete playback snapshot notification was raised.");
+        }
     }
 
     private static async Task LibraryStoreAsync()
@@ -257,6 +289,46 @@ internal static class Program
         if (!actual.Contains(expected, StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Expected output to contain '{expected}'.");
+        }
+    }
+
+    private sealed class FakeProcessRunner : IProcessRunner
+    {
+        public int SearchCalls { get; private set; }
+
+        public int ResolveCalls { get; private set; }
+
+        public Task<ProcessResult> RunAsync(
+            string executable,
+            IReadOnlyList<string> arguments,
+            string? workingDirectory,
+            IReadOnlyDictionary<string, string?>? environment,
+            TimeSpan timeout,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (arguments.Contains("--get-url", StringComparer.Ordinal))
+            {
+                ResolveCalls++;
+                return Task.FromResult(new ProcessResult(0, "https://audio.example/stream\n", string.Empty));
+            }
+
+            SearchCalls++;
+            const string json =
+                """
+                {
+                  "entries": [
+                    {
+                      "id": "cache-test",
+                      "title": "Test Song",
+                      "uploader": "Test Artist",
+                      "duration": 180,
+                      "url": "cache-test"
+                    }
+                  ]
+                }
+                """;
+            return Task.FromResult(new ProcessResult(0, json, string.Empty));
         }
     }
 }

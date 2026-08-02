@@ -25,6 +25,10 @@ public sealed class PlayerApplication : IAsyncDisposable
 
     private CancellationTokenSource? _searchCancellation;
     private CancellationTokenSource? _resolveCancellation;
+    private CancellationTokenSource? _prefetchCancellation;
+    private Task<string?>? _prefetchTask;
+    private string? _prefetchTrackId;
+    private bool _prefetchStarted;
     private int _searchOperation;
     private int _searchResultLimit;
     private int _resolveOperation;
@@ -57,6 +61,7 @@ public sealed class PlayerApplication : IAsyncDisposable
 
         _mpv.PlaybackEnded += OnPlaybackEnded;
         _mpv.PlaybackFailed += OnPlaybackFailed;
+        _mpv.SnapshotChanged += OnSnapshotChanged;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -166,6 +171,9 @@ public sealed class PlayerApplication : IAsyncDisposable
                 }
 
                 return resized;
+            case PlaybackSnapshotChanged snapshotChanged:
+                _state.Playback = snapshotChanged.Snapshot;
+                return true;
             case SearchCompleted search when search.Operation == _searchOperation:
                 _state.IsSearching = false;
                 if (search.Error is not null)
@@ -189,6 +197,8 @@ public sealed class PlayerApplication : IAsyncDisposable
                     _state.Focus = FocusPane.Results;
                     _state.StatusMessage = $"{_state.SearchResults.Count} result(s). Enter plays; m loads 10 more.";
                 }
+
+                BeginPrefetchNextTrack();
 
                 return true;
             case StreamResolved stream when stream.Operation == _resolveOperation:
@@ -218,6 +228,10 @@ public sealed class PlayerApplication : IAsyncDisposable
             case PlaybackEnded:
                 return HandlePlaybackEnded();
             case PlaybackFailed playbackFailed:
+                if (_state.NowPlaying is not null)
+                {
+                    _youtube.InvalidateAudioUrl(_state.NowPlaying.Id);
+                }
                 _state.StatusMessage = playbackFailed.Message;
                 _state.Playback = _mpv.Snapshot;
                 return true;
@@ -343,6 +357,7 @@ public sealed class PlayerApplication : IAsyncDisposable
             case 'x':
             case 'X':
                 _state.Shuffle = !_state.Shuffle;
+                BeginPrefetchNextTrack();
                 _state.StatusMessage = $"Shuffle {(_state.Shuffle ? "enabled" : "disabled")}.";
                 return true;
             case 'r':
@@ -425,6 +440,7 @@ public sealed class PlayerApplication : IAsyncDisposable
             return;
         }
 
+        CancelPrefetch();
         _searchCancellation?.Cancel();
         _searchCancellation?.Dispose();
         _searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
@@ -488,6 +504,15 @@ public sealed class PlayerApplication : IAsyncDisposable
 
     private void BeginResolve(Track track, double resumePositionSeconds = 0)
     {
+        var prefetchTask = string.Equals(_prefetchTrackId, track.Id, StringComparison.Ordinal)
+            && Volatile.Read(ref _prefetchStarted)
+                ? _prefetchTask
+                : null;
+        if (prefetchTask is null)
+        {
+            CancelPrefetch();
+        }
+
         _resolveCancellation?.Cancel();
         _resolveCancellation?.Dispose();
         _resolveCancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
@@ -509,7 +534,10 @@ public sealed class PlayerApplication : IAsyncDisposable
         {
             try
             {
-                var url = await _youtube.ResolveAudioUrlAsync(track, token).ConfigureAwait(false);
+                var url = prefetchTask is null
+                    ? await _youtube.ResolveAudioUrlAsync(track, token).ConfigureAwait(false)
+                    : await prefetchTask.WaitAsync(token).ConfigureAwait(false)
+                        ?? await _youtube.ResolveAudioUrlAsync(track, token).ConfigureAwait(false);
                 _events.Writer.TryWrite(new StreamResolved(operation, track, url, null));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -542,6 +570,7 @@ public sealed class PlayerApplication : IAsyncDisposable
             _lastPlayedTrack = track;
             _state.Playback = _mpv.Snapshot;
             _state.StatusMessage = $"Playing {track.Title}.";
+            BeginPrefetchNextTrack();
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {
@@ -592,6 +621,7 @@ public sealed class PlayerApplication : IAsyncDisposable
 
         _state.Queue.Add(track);
         _state.SelectedQueueItem = _state.Queue.Count - 1;
+        BeginPrefetchNextTrack();
         _state.StatusMessage = $"Queued {track.Title}.";
     }
 
@@ -627,6 +657,7 @@ public sealed class PlayerApplication : IAsyncDisposable
             RepeatMode.Track => RepeatMode.Queue,
             _ => RepeatMode.Off
         };
+        BeginPrefetchNextTrack();
         _state.StatusMessage = $"Repeat {_state.Repeat.ToString().ToLowerInvariant()}.";
     }
 
@@ -674,7 +705,83 @@ public sealed class PlayerApplication : IAsyncDisposable
         }
 
         _state.ClampSelections();
+        BeginPrefetchNextTrack();
         _state.StatusMessage = $"Removed {removed.Title} from the queue.";
+    }
+
+    private void BeginPrefetchNextTrack()
+    {
+        if (_state.Shuffle || _state.Queue.Count == 0 || _state.NowPlaying is null)
+        {
+            CancelPrefetch();
+            return;
+        }
+
+        var currentIndex = _state.CurrentQueueItem;
+        if (currentIndex < 0)
+        {
+            currentIndex = _state.Queue.FindIndex(track => track.Id == _state.NowPlaying.Id);
+        }
+
+        var nextIndex = currentIndex < 0 ? 0 : currentIndex + 1;
+        if (nextIndex >= _state.Queue.Count)
+        {
+            if (_state.Repeat != RepeatMode.Queue)
+            {
+                CancelPrefetch();
+                return;
+            }
+
+            nextIndex = 0;
+        }
+
+        var nextTrack = _state.Queue[nextIndex];
+        if (nextTrack.Id == _state.NowPlaying.Id)
+        {
+            CancelPrefetch();
+            return;
+        }
+
+        if (string.Equals(_prefetchTrackId, nextTrack.Id, StringComparison.Ordinal)
+            && _prefetchTask is not null)
+        {
+            return;
+        }
+
+        CancelPrefetch();
+        _prefetchCancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        var token = _prefetchCancellation.Token;
+        _prefetchTrackId = nextTrack.Id;
+        _prefetchTask = PrefetchAsync(nextTrack, token);
+    }
+
+    private async Task<string?> PrefetchAsync(Track track, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+            Volatile.Write(ref _prefetchStarted, true);
+            return await _youtube.ResolveAudioUrlAsync(track, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Queue prefetch failed: {exception.Message}");
+            return null;
+        }
+    }
+
+    private void CancelPrefetch()
+    {
+        _prefetchCancellation?.Cancel();
+        _prefetchCancellation?.Dispose();
+        _prefetchCancellation = null;
+        _prefetchTask = null;
+        _prefetchTrackId = null;
+        Volatile.Write(ref _prefetchStarted, false);
     }
 
     private bool BeginNextTrack()
@@ -879,6 +986,9 @@ public sealed class PlayerApplication : IAsyncDisposable
     private void OnPlaybackFailed(string message) =>
         _events.Writer.TryWrite(new PlaybackFailed(message));
 
+    private void OnSnapshotChanged(PlaybackSnapshot snapshot) =>
+        _events.Writer.TryWrite(new PlaybackSnapshotChanged(snapshot));
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -892,8 +1002,10 @@ public sealed class PlayerApplication : IAsyncDisposable
         _resolveCancellation?.Cancel();
         _searchCancellation?.Dispose();
         _resolveCancellation?.Dispose();
+        CancelPrefetch();
         _mpv.PlaybackEnded -= OnPlaybackEnded;
         _mpv.PlaybackFailed -= OnPlaybackFailed;
+        _mpv.SnapshotChanged -= OnSnapshotChanged;
         await _mpv.DisposeAsync().ConfigureAwait(false);
         _shutdown.Dispose();
     }
@@ -903,6 +1015,8 @@ public sealed class PlayerApplication : IAsyncDisposable
     private sealed record KeyPressed(ConsoleKeyInfo Key) : AppEvent;
 
     private sealed record Tick : AppEvent;
+
+    private sealed record PlaybackSnapshotChanged(PlaybackSnapshot Snapshot) : AppEvent;
 
     private sealed record SearchCompleted(
         int Operation,
