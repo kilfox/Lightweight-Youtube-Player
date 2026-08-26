@@ -281,28 +281,28 @@ public sealed class MpvClient : IAsyncDisposable
 
     private async Task ConfigureMediaKeysAsync(CancellationToken cancellationToken)
     {
-        (string Key, string Command)[] bindings =
-        [
-            ("PLAY", "set pause no"),
-            ("PAUSE", "set pause yes"),
-            ("PLAYPAUSE", "cycle pause"),
-            ("PLAYONLY", "set pause no"),
-            ("PAUSEONLY", "set pause yes"),
-            ("STOP", "script-message lightytp-media-stop"),
-            ("NEXT", "script-message lightytp-media-next"),
-            ("PREV", "script-message lightytp-media-previous"),
-            ("XF86_PAUSE", "cycle pause"),
-            ("XF86_STOP", "script-message lightytp-media-stop"),
-            ("XF86_NEXT", "script-message lightytp-media-next"),
-            ("XF86_PREV", "script-message lightytp-media-previous")
-        ];
+        const string section =
+            """
+            PLAY set pause no
+            PAUSE set pause yes
+            PLAYPAUSE cycle pause
+            PLAYONLY set pause no
+            PAUSEONLY set pause yes
+            STOP script-message lightytp-media-stop
+            NEXT script-message lightytp-media-next
+            PREV script-message lightytp-media-previous
+            XF86_PAUSE cycle pause
+            XF86_STOP script-message lightytp-media-stop
+            XF86_NEXT script-message lightytp-media-next
+            XF86_PREV script-message lightytp-media-previous
+            """;
 
-        foreach (var (key, command) in bindings)
-        {
-            await SendCommandAsync(
-                ["keybind", key, command, "LightYTP media control"],
-                cancellationToken).ConfigureAwait(false);
-        }
+        await SendCommandAsync(
+            ["define-section", "lightytp-media-controls", section, "force"],
+            cancellationToken).ConfigureAwait(false);
+        await SendCommandAsync(
+            ["enable-section", "lightytp-media-controls"],
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RestartAsync(CancellationToken cancellationToken)
