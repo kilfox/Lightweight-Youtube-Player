@@ -110,6 +110,7 @@
             <Button Classes="transport" Content="■" ToolTip.Tip="Stop (S)" Click="OnStopClick" />
             <Button Classes="transport" Content="&gt;|" ToolTip.Tip="Next (N)" Click="OnNextClick" />
             <Button Classes="transport" Content="♥" ToolTip.Tip="Toggle favorite" Click="OnToggleFavoriteClick" />
+            <Button x:Name="AutoplayButton" Content="AUTOPLAY OFF" ToolTip.Tip="Toggle autoplay radio (Y)" Click="OnAutoplayClick" FontSize="10" Padding="7,7" />
           </StackPanel>
 
           <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*" Margin="10,0,0,0">

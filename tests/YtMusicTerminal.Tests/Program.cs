@@ -11,16 +11,19 @@ internal static class Program
         var tests = new List<(string Name, Func<Task> Run)>
         {
             ("Parses yt-dlp search output", ParseSearchOutputAsync),
+            ("Uses YouTube Mix for filtered related tracks", RelatedTracksMixAsync),
+            ("Falls back to related-track search", RelatedTracksFallbackAsync),
             ("Caches searches and resolved audio URLs", YtDlpCacheAsync),
             ("Renders the terminal layout", RenderLayoutAsync),
             ("Formats playback duration", FormatDurationAsync),
             ("Builds safe edition-specific uninstall plans", UninstallPlansAsync),
+            ("Requires one playback-tool update per app version", ToolUpdateGateAsync),
             ("Deduplicates bounded history newest-first", HistoryStoreAsync),
             ("Persists queue, favorites, and resume state", LibraryStoreAsync)
         };
         if (args.Contains("--live", StringComparer.Ordinal))
         {
-            tests.Add(("Searches, resolves, and starts live playback", LivePlaybackAsync));
+            tests.Add(("Extracts a Mix recommendation and starts muted playback", LivePlaybackAsync));
         }
         if (args.Contains("--mpv", StringComparer.Ordinal))
         {
@@ -91,7 +94,8 @@ internal static class Program
                 PlaybackState.Playing,
                 TimeSpan.FromMinutes(1),
                 TimeSpan.FromMinutes(3),
-                70)
+                70),
+            Autoplay = true
         };
 
         var frame = new TerminalFrameRenderer().Render(state, 100, 30);
@@ -103,6 +107,7 @@ internal static class Program
         Contains("01:00 / 03:00", frame);
         Contains("Vol 70%", frame);
         Contains("Queue", frame);
+        Contains("Autoplay on", frame);
 
         state.Focus = FocusPane.Player;
         frame = new TerminalFrameRenderer().Render(state, 100, 30);
@@ -133,6 +138,81 @@ internal static class Program
         youtube.InvalidateAudioUrl(track.Id);
         await youtube.ResolveAudioUrlAsync(track, CancellationToken.None);
         Equal(2, runner.ResolveCalls);
+    }
+
+    private static async Task RelatedTracksMixAsync()
+    {
+        const string mixJson =
+            """
+            {
+              "entries": [
+                { "id": "seed", "title": "Seed", "uploader": "Artist", "url": "seed" },
+                { "id": "recent", "title": "Recent", "uploader": "Artist", "url": "recent" },
+                { "id": "session", "title": "Session", "uploader": "Artist", "url": "session" },
+                { "id": "related", "title": "Related", "uploader": "Other", "url": "related" },
+                { "id": "related", "title": "Duplicate", "uploader": "Other", "url": "related" }
+              ]
+            }
+            """;
+        var runner = new RelatedProcessRunner(mixJson, mixExitCode: 0, searchJson: "{\"entries\":[]}");
+        var youtube = new YtDlpClient("yt-dlp", runner);
+        var seed = new Track("seed", "Seed", "Artist", null, "https://youtube.com/watch?v=seed");
+
+        var tracks = await youtube.GetRelatedTracksAsync(
+            seed,
+            new HashSet<string>(["recent", "session"], StringComparer.Ordinal),
+            CancellationToken.None);
+
+        Equal(1, tracks.Count);
+        Equal("related", tracks[0].Id);
+        Equal(1, runner.MixCalls);
+        Equal(0, runner.SearchCalls);
+    }
+
+    private static async Task RelatedTracksFallbackAsync()
+    {
+        const string exhaustedMixJson =
+            """
+            {
+              "entries": [
+                { "id": "seed", "title": "Seed", "uploader": "Artist", "url": "seed" },
+                { "id": "recent", "title": "Recent", "uploader": "Artist", "url": "recent" }
+              ]
+            }
+            """;
+        const string searchJson =
+            """
+            {
+              "entries": [
+                { "id": "seed", "title": "Seed", "uploader": "Artist", "url": "seed" },
+                { "id": "recent", "title": "Recent", "uploader": "Artist", "url": "recent" },
+                { "id": "fallback", "title": "Fallback", "uploader": "Other", "url": "fallback" }
+              ]
+            }
+            """;
+        var runner = new RelatedProcessRunner("", mixExitCode: 1, searchJson);
+        var youtube = new YtDlpClient("yt-dlp", runner);
+        var seed = new Track("seed", "Seed", "Artist", null, "https://youtube.com/watch?v=seed");
+
+        var tracks = await youtube.GetRelatedTracksAsync(
+            seed,
+            new HashSet<string>(["recent"], StringComparer.Ordinal),
+            CancellationToken.None);
+
+        Equal(1, tracks.Count);
+        Equal("fallback", tracks[0].Id);
+        Equal(1, runner.MixCalls);
+        Equal(1, runner.SearchCalls);
+
+        var exhaustedRunner = new RelatedProcessRunner(exhaustedMixJson, mixExitCode: 0, searchJson);
+        var exhaustedYoutube = new YtDlpClient("yt-dlp", exhaustedRunner);
+        var exhaustedTracks = await exhaustedYoutube.GetRelatedTracksAsync(
+            seed,
+            new HashSet<string>(["recent"], StringComparer.Ordinal),
+            CancellationToken.None);
+        Equal("fallback", exhaustedTracks.Single().Id);
+        Equal(1, exhaustedRunner.MixCalls);
+        Equal(1, exhaustedRunner.SearchCalls);
     }
 
     private static Task FormatDurationAsync()
@@ -188,6 +268,28 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static async Task ToolUpdateGateAsync()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"ytmusic-tests-{Guid.NewGuid():N}");
+        var markerFile = Path.Combine(directory, "tools-update-version.txt");
+        try
+        {
+            Equal(true, ToolUpdateGate.IsRequired(markerFile, "0.4.0"));
+
+            await ToolUpdateGate.MarkCompletedAsync(markerFile, "0.4.0", CancellationToken.None);
+
+            Equal(false, ToolUpdateGate.IsRequired(markerFile, "0.4.0"));
+            Equal(true, ToolUpdateGate.IsRequired(markerFile, "0.5.0"));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     private static async Task HistoryStoreAsync()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"ytmusic-tests-{Guid.NewGuid():N}");
@@ -228,38 +330,59 @@ internal static class Program
         var mpvPath = ToolLocator.Find(mpvName, null, "YTMUSIC_MPV")
             ?? throw new InvalidOperationException("mpv is not installed.");
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        var youtube = new YtDlpClient(ytDlp, new ProcessRunner());
-        var tracks = await youtube.SearchAsync(
-            "Daft Punk Get Lucky official audio",
-            3,
-            timeout.Token).ConfigureAwait(false);
-        if (tracks.Count == 0)
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var stage = "search";
+        try
         {
-            throw new InvalidOperationException("The live search returned no tracks.");
-        }
+            var youtube = new YtDlpClient(ytDlp, new ProcessRunner());
+            var tracks = await youtube.SearchAsync(
+                "Daft Punk Get Lucky official audio",
+                3,
+                timeout.Token).ConfigureAwait(false);
+            if (tracks.Count == 0)
+            {
+                throw new InvalidOperationException("The live search returned no tracks.");
+            }
 
-        var url = await youtube.ResolveAudioUrlAsync(tracks[0], timeout.Token).ConfigureAwait(false);
-        if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+            stage = "Mix extraction";
+            var related = await youtube.GetRelatedTracksAsync(
+                tracks[0],
+                new HashSet<string>(StringComparer.Ordinal),
+                timeout.Token).ConfigureAwait(false);
+            if (related.Count == 0)
+            {
+                throw new InvalidOperationException("The live Mix returned no eligible recommendation.");
+            }
+
+            stage = "audio URL resolution";
+            var url = await youtube.ResolveAudioUrlAsync(related[0], timeout.Token).ConfigureAwait(false);
+            if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+            {
+                throw new InvalidOperationException("The live resolver returned an invalid URL.");
+            }
+
+            stage = "mpv startup";
+            await using var mpv = new MpvClient(mpvPath, initialVolume: 0);
+            await mpv.StartAsync(timeout.Token).ConfigureAwait(false);
+            stage = "muted playback startup";
+            await mpv.LoadAsync(url, timeout.Token).ConfigureAwait(false);
+
+            while (mpv.Snapshot.State is PlaybackState.Idle or PlaybackState.Loading)
+            {
+                await Task.Delay(200, timeout.Token).ConfigureAwait(false);
+            }
+
+            if (mpv.Snapshot.State != PlaybackState.Playing)
+            {
+                throw new InvalidOperationException($"mpv entered state {mpv.Snapshot.State}.");
+            }
+
+            await mpv.StopAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw new InvalidOperationException("The live resolver returned an invalid URL.");
+            throw new InvalidOperationException($"Live test timed out during {stage}.");
         }
-
-        await using var mpv = new MpvClient(mpvPath, initialVolume: 0);
-        await mpv.StartAsync(timeout.Token).ConfigureAwait(false);
-        await mpv.LoadAsync(url, timeout.Token).ConfigureAwait(false);
-
-        while (mpv.Snapshot.State is PlaybackState.Idle or PlaybackState.Loading)
-        {
-            await Task.Delay(200, timeout.Token).ConfigureAwait(false);
-        }
-
-        if (mpv.Snapshot.State != PlaybackState.Playing)
-        {
-            throw new InvalidOperationException($"mpv entered state {mpv.Snapshot.State}.");
-        }
-
-        await mpv.StopAsync(timeout.Token).ConfigureAwait(false);
     }
 
     private static async Task MpvIpcAsync()
@@ -304,7 +427,8 @@ internal static class Program
                     LastTrack = track,
                     LastPositionSeconds = 42,
                     Shuffle = true,
-                    Repeat = RepeatMode.Queue
+                    Repeat = RepeatMode.Queue,
+                    Autoplay = true
                 },
                 CancellationToken.None).ConfigureAwait(false);
 
@@ -315,6 +439,14 @@ internal static class Program
             Equal(42d, restored.LastPositionSeconds);
             Equal(true, restored.Shuffle);
             Equal(RepeatMode.Queue, restored.Repeat);
+            Equal(true, restored.Autoplay);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(directory, "old-library.json"),
+                "{\"Queue\":[],\"Favorites\":[],\"Shuffle\":false,\"Repeat\":0}");
+            var oldStore = new LibraryStore(Path.Combine(directory, "old-library.json"));
+            var oldState = await oldStore.LoadAsync(CancellationToken.None);
+            Equal(false, oldState.Autoplay);
         }
         finally
         {
@@ -375,6 +507,35 @@ internal static class Program
                 }
                 """;
             return Task.FromResult(new ProcessResult(0, json, string.Empty));
+        }
+    }
+
+    private sealed class RelatedProcessRunner(
+        string mixJson,
+        int mixExitCode,
+        string searchJson) : IProcessRunner
+    {
+        public int MixCalls { get; private set; }
+
+        public int SearchCalls { get; private set; }
+
+        public Task<ProcessResult> RunAsync(
+            string executable,
+            IReadOnlyList<string> arguments,
+            string? workingDirectory,
+            IReadOnlyDictionary<string, string?>? environment,
+            TimeSpan timeout,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (arguments.Any(argument => argument.Contains("list=RD", StringComparison.Ordinal)))
+            {
+                MixCalls++;
+                return Task.FromResult(new ProcessResult(mixExitCode, mixJson, "Mix unavailable"));
+            }
+
+            SearchCalls++;
+            return Task.FromResult(new ProcessResult(0, searchJson, string.Empty));
         }
     }
 }

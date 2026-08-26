@@ -28,11 +28,12 @@ The first search returns 10 results. Leave the search field before using `m`; wh
 | --- | --- |
 | `Enter` | Play the selected queue or history item |
 | `Delete` | Remove the selected queue item |
-| `n` | Play the next queued track |
-| `p` | Play the previous queued track |
+| `n` | Play the next queued track, or move forward in an active radio session |
+| `p` | Play the previous queued track, or move backward in an active radio session |
 | `h` | Focus playback history |
 | `x` | Toggle queue shuffle |
 | `r` | Cycle repeat off, track, and queue |
+| `y` | Toggle autoplay radio on or off |
 
 ## Playback
 
@@ -44,6 +45,8 @@ The first search returns 10 results. Leave the search field before using `m`; wh
 | `+` / `-` | Raise or lower volume by 5% |
 | `s` | Stop playback |
 | `F5` | Resume the last track from its saved position |
+
+On Windows and macOS, LightYTP accepts hardware play/pause, play, pause, stop, next, and previous buttons from keyboards, headsets, and earbuds. The operating system decides which active media app receives them. Linux support depends on the desktop environment.
 
 ## Application
 

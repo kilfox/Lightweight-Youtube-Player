@@ -61,6 +61,7 @@ lightytp-gui "https://www.youtube.com/watch?v=..."
 ## Player controls
 
 - Use the transport buttons for previous, play/pause, stop, and next.
+- Click **AUTOPLAY ON/OFF** to enable or disable autoplay radio.
 - Drag the timeline to seek.
 - Use the volume slider to change volume.
 - Click the heart button to add or remove the current track from favorites.
@@ -68,18 +69,20 @@ lightytp-gui "https://www.youtube.com/watch?v=..."
 
 See [GUI_HOTKEYS.md](GUI_HOTKEYS.md) for keyboard controls.
 
+LightYTP GUI accepts system media buttons on keyboards, headsets, and earbuds for play, pause, stop, and queued or radio previous/next tracks on Windows and macOS. The operating system decides which active media app receives them. Linux media-button behavior depends on the desktop environment.
+
 ## Queue, history, and favorites
 
 - **Queue**: add tracks from search or history, play them in order, remove entries, or clear the list.
 - **History**: stores the latest 100 unique played tracks with the newest first.
 - **Favorites**: stores selected tracks locally and shares them with the terminal edition.
 
-The GUI also respects shuffle and repeat settings last selected in the terminal edition.
-Only the next queued track is resolved after a short idle delay for faster transitions. Searches take priority, and an active resolution is reused if you request that track. Search results and resolved stream URLs use a small, time-limited memory cache that is cleared when the GUI exits.
+The GUI also respects shuffle, repeat, and autoplay settings last selected in the terminal edition.
+Only the next queued track is resolved immediately for faster transitions, and an active resolution is reused if you request that track. When autoplay is enabled and nothing explicit has priority, the GUI prepares one related track and URL. A naturally finished track starts that recommendation; stopping or manually changing tracks does not. Queue items, shuffle, and repeat take priority. Radio tracks stay out of the saved queue, while Next and Previous navigate the current radio session. The current track, the 20 most recent history entries, and tracks already used in the session are excluded. Search results and resolved stream URLs use a small, time-limited memory cache that is cleared when the GUI exits.
 
 ## Shared local data
 
-Both editions use the same settings, history, queue, favorites, and resume data:
+Both editions use the same settings, history, queue, favorites, autoplay preference, and resume data:
 
 - Windows: `%LOCALAPPDATA%\YtMusicTerminal`
 - macOS: `~/Library/Application Support/YtMusicTerminal`

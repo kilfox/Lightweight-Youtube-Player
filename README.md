@@ -13,9 +13,11 @@ Both editions support:
 - YouTube search
 - Audio-only streaming
 - Play, pause, stop, seek, and volume controls
+- Keyboard, headset, and earbud media buttons on Windows and macOS
 - An in-session queue with next/previous navigation
 - Automatic queue advancement
 - One-track queue prefetch for faster transitions
+- Optional autoplay radio with one-track recommendation prefetch
 - Bounded in-session search and stream-resolution caches
 - Local playback history
 - Persistent queue and local favorites
@@ -51,9 +53,12 @@ The release contains a self-contained LightYTP executable. Users do not need the
 4. Launch the terminal edition from a new terminal or open **LightYTP GUI** from the Start menu:
 
 ```powershell
+lightytp update
 lightytp
 lightytp-gui
 ```
+
+The terminal edition requires `lightytp update` once before its first launch so its bundled playback tools are current. After the update completes, run `lightytp` again.
 
 The Windows release already includes yt-dlp, mpv, and Deno. Administrator access and a separate .NET installation are not required.
 
@@ -73,7 +78,14 @@ The Windows release already includes yt-dlp, mpv, and Deno. Administrator access
    sh ./install.sh
    ```
 
-5. Run `lightytp` for the terminal edition. The GUI installer places **LightYTP GUI** in `~/Applications` and also adds `lightytp-gui`.
+5. Update the terminal edition's playback tools, then open it:
+
+   ```shell
+   lightytp update
+   lightytp
+   ```
+
+   The GUI installer places **LightYTP GUI** in `~/Applications` and also adds `lightytp-gui`.
 
 If macOS blocks the unsigned open-source executable, open **System Settings → Privacy & Security** and allow LightYTP, then launch it again.
 
@@ -163,9 +175,10 @@ To remove the GUI edition, open LightYTP GUI and click **UNINSTALL** at the bott
 | `Left` / `Right` | Seek backward/forward five seconds |
 | `Up` / `Down` | Change volume when the player is focused |
 | `+` / `-` | Change volume |
-| `n` / `p` | Next/previous queued track |
+| `n` / `p` | Next/previous queued track or active radio track |
 | `x` | Toggle queue shuffle |
 | `r` | Cycle repeat off, track, and queue |
+| `y` | Toggle autoplay radio |
 | `F5` | Resume the last track and position |
 | `s` | Stop |
 | `h` | Focus history |
@@ -174,13 +187,13 @@ To remove the GUI edition, open LightYTP GUI and click **UNINSTALL** at the bott
 
 While the search field is focused, ordinary characters—including `q`—are entered into the query. Use `Escape` to focus the player or `Tab` to move to another section. `Ctrl+Q` always quits.
 
-The GUI supports mouse controls plus `Ctrl+F`, `Space`, arrow keys, `N`, `P`, `S`, and `Ctrl+Q`. See [GUI_HOTKEYS.md](GUI_HOTKEYS.md).
+The GUI supports mouse controls plus `Ctrl+F`, `Space`, arrow keys, `N`, `P`, `S`, `Y`, and `Ctrl+Q`. See [GUI_HOTKEYS.md](GUI_HOTKEYS.md).
 
 ## Data and configuration
 
 Data follows the operating system's local application-data convention: `%LOCALAPPDATA%\YtMusicTerminal` on Windows, `~/Library/Application Support/YtMusicTerminal` on macOS, and `~/.local/share/YtMusicTerminal` on most Linux systems.
 
-Queue, favorites, playback modes, and resume state are stored in `library.json`. mpv diagnostic output is written to `mpv.log`. If mpv's IPC connection closes while a track is loading, the player restarts mpv once and retries automatically.
+Queue, favorites, playback modes, autoplay preference, and resume state are stored in `library.json`. mpv diagnostic output is written to `mpv.log`. If mpv's IPC connection closes while a track is loading, the player restarts mpv once and retries automatically.
 
 Tool paths can also be supplied through `YTMUSIC_YTDLP` and `YTMUSIC_MPV`.
 
@@ -194,7 +207,8 @@ Tool paths can also be supplied through `YTMUSIC_YTDLP` and `YTMUSIC_MPV`.
 - Bounded 4 MiB mpv forward cache and 512 KiB back-cache
 - yt-dlp exits immediately after each search or stream resolution
 - Search results and resolved stream URLs are cached only for the current session with fixed size and expiry limits
-- Only the next queued track is resolved after a short idle delay; searches take priority and an active resolution is reused
+- Only the next queued track is resolved immediately; an active resolution is reused when that track starts
+- When autoplay is on and no queued track has priority, one related track and its audio URL are prepared ahead
 - The terminal redraws only for input, state changes, terminal resizing, and playback progress
 - History is capped at 100 entries
 

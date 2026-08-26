@@ -51,17 +51,27 @@ internal static class Program
             return 0;
         }
 
-        if (options.UpdateTools)
-        {
-            return await UpdateToolsAsync().ConfigureAwait(false);
-        }
-
         if (options.Uninstall)
         {
             return Uninstall(options.AssumeYes);
         }
 
         var appPaths = AppPaths.CreateDefault();
+        var toolUpdateMarker = Path.Combine(appPaths.DataDirectory, "tools-update-version.txt");
+
+        if (options.UpdateTools)
+        {
+            return await UpdateToolsAsync(toolUpdateMarker).ConfigureAwait(false);
+        }
+
+        if ((OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+            && !options.Diagnose
+            && ToolUpdateGate.IsRequired(toolUpdateMarker, Version))
+        {
+            PrintRequiredFirstRunUpdate();
+            return 2;
+        }
+
         var settingsStore = new SettingsStore(appPaths.SettingsFile);
         AppSettings settings;
         try
@@ -274,14 +284,27 @@ internal static class Program
         }
     }
 
-    private static async Task<int> UpdateToolsAsync()
+    private static void PrintRequiredFirstRunUpdate()
     {
+        Console.Error.WriteLine("LightYTP requires a one-time playback-tool update before first use.");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("Run:");
+        Console.Error.WriteLine("  lightytp update");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("After the update completes, start LightYTP again.");
+    }
+
+    private static async Task<int> UpdateToolsAsync(string toolUpdateMarker)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return await UpdateMacOsToolsAsync(toolUpdateMarker).ConfigureAwait(false);
+        }
+
         if (!OperatingSystem.IsWindows())
         {
             Console.WriteLine("LightYTP uses tools installed by your system package manager.");
-            Console.WriteLine(OperatingSystem.IsMacOS()
-                ? "Update them with: brew upgrade yt-dlp mpv deno"
-                : "Update yt-dlp, mpv, and Deno with your Linux package manager.");
+            Console.WriteLine("Update yt-dlp, mpv, and Deno with your Linux package manager.");
             return 0;
         }
 
@@ -327,7 +350,54 @@ internal static class Program
             return result.ExitCode;
         }
 
+        return await RecordCompletedToolUpdateAsync(toolUpdateMarker).ConfigureAwait(false);
+    }
+
+    private static async Task<int> UpdateMacOsToolsAsync(string toolUpdateMarker)
+    {
+        var brew = ToolLocator.Find("brew", null, "LIGHTYTP_BREW");
+        if (brew is null)
+        {
+            Console.Error.WriteLine("Homebrew is required to update yt-dlp, mpv, and Deno.");
+            Console.Error.WriteLine("Install Homebrew from https://brew.sh, then run lightytp update again.");
+            return 2;
+        }
+
+        Console.WriteLine("Updating yt-dlp, mpv, and Deno with Homebrew...");
+        var result = await new ProcessRunner().RunAsync(
+            brew,
+            ["upgrade", "yt-dlp", "mpv", "deno"],
+            Path.GetDirectoryName(brew),
+            null,
+            TimeSpan.FromMinutes(10),
+            CancellationToken.None).ConfigureAwait(false);
+        Console.Write(result.StandardOutput);
+        if (result.ExitCode != 0)
+        {
+            Console.Error.Write(result.StandardError);
+            return result.ExitCode;
+        }
+
+        return await RecordCompletedToolUpdateAsync(toolUpdateMarker).ConfigureAwait(false);
+    }
+
+    private static async Task<int> RecordCompletedToolUpdateAsync(string toolUpdateMarker)
+    {
+        try
+        {
+            await ToolUpdateGate.MarkCompletedAsync(
+                toolUpdateMarker,
+                Version,
+                CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Playback tools were updated, but first-run setup could not be recorded: {exception.Message}");
+            return 2;
+        }
+
         Console.WriteLine("Playback tools updated successfully.");
+        Console.WriteLine("Run lightytp again to open the player.");
         return 0;
     }
 

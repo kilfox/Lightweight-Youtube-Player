@@ -33,6 +33,10 @@ public sealed partial class MainWindow : Window
     private Task<string?>? _prefetchTask;
     private string? _prefetchTrackId;
     private bool _prefetchStarted;
+    private CancellationTokenSource? _autoplayCancellation;
+    private Task<AutoplayCandidate?>? _autoplayTask;
+    private string? _autoplaySeedId;
+    private readonly List<Track> _radioTracks = [];
 
     private AppSettings _settings = new();
     private SettingsStore? _settingsStore;
@@ -43,7 +47,11 @@ public sealed partial class MainWindow : Window
     private Track? _currentTrack;
     private RepeatMode _repeat;
     private bool _shuffle;
+    private bool _autoplay;
     private int _queueIndex = -1;
+    private int _radioIndex = -1;
+    private bool _currentTrackIsAutoplay;
+    private bool _manualStopRequested;
     private int _searchLimit = SearchBatchSize;
     private bool _updatingPlaybackControls;
     private bool _isClosing;
@@ -129,6 +137,9 @@ public sealed partial class MainWindow : Window
         _mpv.PlaybackEnded += OnPlaybackEnded;
         _mpv.PlaybackFailed += OnPlaybackFailed;
         _mpv.SnapshotChanged += OnSnapshotChanged;
+        _mpv.MediaNextRequested += OnMediaNextRequested;
+        _mpv.MediaPreviousRequested += OnMediaPreviousRequested;
+        _mpv.MediaStopRequested += OnMediaStopRequested;
 
         var historyTask = _historyStore.LoadAsync(cancellationToken);
         var libraryTask = _libraryStore.LoadAsync(cancellationToken);
@@ -142,6 +153,8 @@ public sealed partial class MainWindow : Window
         _currentTrack = library.LastTrack;
         _repeat = library.Repeat;
         _shuffle = library.Shuffle;
+        _autoplay = library.Autoplay;
+        UpdateAutoplayButton();
         _queueIndex = _currentTrack is null ? -1 : IndexOf(_queue, _currentTrack.Id);
 
         _updatingPlaybackControls = true;
@@ -194,17 +207,20 @@ public sealed partial class MainWindow : Window
     private async Task PlayTrackAsync(
         Track track,
         Task<string?>? prefetchTask,
+        string? preparedUrl,
+        bool isAutoplay,
         CancellationToken cancellationToken)
     {
         SetStatus($"Resolving {track.Title}...");
-        var url = prefetchTask is null
+        var url = preparedUrl ?? (prefetchTask is null
             ? await RequireYoutube().ResolveAudioUrlAsync(track, cancellationToken)
             : await prefetchTask.WaitAsync(cancellationToken)
-                ?? await RequireYoutube().ResolveAudioUrlAsync(track, cancellationToken);
+                ?? await RequireYoutube().ResolveAudioUrlAsync(track, cancellationToken));
         await RequireMpv().LoadAsync(url, cancellationToken);
 
         _currentTrack = track;
-        _queueIndex = IndexOf(_queue, track.Id);
+        _currentTrackIsAutoplay = isAutoplay;
+        _queueIndex = isAutoplay ? -1 : IndexOf(_queue, track.Id);
         NowPlayingText.Text = track.Title;
         ArtistText.Text = track.Artist;
 
@@ -218,6 +234,7 @@ public sealed partial class MainWindow : Window
     private async Task RunSearchAsync(bool resetLimit)
     {
         CancelPrefetch();
+        CancelAutoplayPrefetch();
         _searchCancellation?.Cancel();
         _searchCancellation?.Dispose();
         _searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
@@ -231,9 +248,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task RunPlayTrackAsync(Track track)
+    private async Task RunPlayTrackAsync(
+        Track track,
+        string? preparedUrl = null,
+        bool isAutoplay = false,
+        bool resetRadio = true)
     {
-        var prefetchTask = string.Equals(_prefetchTrackId, track.Id, StringComparison.Ordinal)
+        _manualStopRequested = false;
+        if (resetRadio)
+        {
+            ResetRadioSession();
+        }
+
+        var prefetchTask = preparedUrl is null
+            && string.Equals(_prefetchTrackId, track.Id, StringComparison.Ordinal)
             && Volatile.Read(ref _prefetchStarted)
                 ? _prefetchTask
                 : null;
@@ -248,7 +276,7 @@ public sealed partial class MainWindow : Window
         var token = _resolveCancellation.Token;
         try
         {
-            await PlayTrackAsync(track, prefetchTask, token);
+            await PlayTrackAsync(track, prefetchTask, preparedUrl, isAutoplay, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -310,17 +338,87 @@ public sealed partial class MainWindow : Window
         await RunPlayTrackAsync(_queue[index]);
     }
 
-    private async Task AdvanceAfterPlaybackAsync()
+    private async Task MoveNextAsync(CancellationToken cancellationToken)
     {
-        if (_currentTrack is not null && _repeat == RepeatMode.Track)
+        if (_queue.Count > 0)
         {
-            await RunActionAsync(() => RunPlayTrackAsync(_currentTrack));
+            await MoveQueueAsync(1, wrap: true, cancellationToken);
             return;
         }
 
-        if (_queue.Count == 0)
+        if (_autoplay && _currentTrackIsAutoplay)
         {
-            SetStatus("Playback finished.");
+            await BeginNextAutoplayTrackAsync(cancellationToken);
+            return;
+        }
+
+        SetStatus("The queue is empty.");
+    }
+
+    private async Task MovePreviousAsync(CancellationToken cancellationToken)
+    {
+        if (_queue.Count > 0)
+        {
+            await MoveQueueAsync(-1, wrap: true, cancellationToken);
+            return;
+        }
+
+        if (_currentTrackIsAutoplay && _radioIndex > 0)
+        {
+            _radioIndex--;
+            await RunPlayTrackAsync(
+                _radioTracks[_radioIndex],
+                isAutoplay: true,
+                resetRadio: false);
+            return;
+        }
+
+        SetStatus("There is no previous radio track.");
+    }
+
+    private async Task StopPlaybackAsync(CancellationToken cancellationToken)
+    {
+        _manualStopRequested = true;
+        CancelPrefetch();
+        ResetRadioSession();
+        await RequireMpv().StopAsync(cancellationToken);
+        SetStatus("Stopped.");
+    }
+
+    private void ToggleAutoplay()
+    {
+        _autoplay = !_autoplay;
+        if (_autoplay)
+        {
+            BeginPrefetchNextTrack();
+        }
+        else
+        {
+            CancelAutoplayPrefetch();
+        }
+
+        UpdateAutoplayButton();
+        SetStatus($"Autoplay {(_autoplay ? "enabled" : "disabled")}.");
+        _ = RunActionAsync(() => SaveStateAsync(_lifetime.Token));
+    }
+
+    private void UpdateAutoplayButton() =>
+        AutoplayButton.Content = _autoplay ? "AUTOPLAY ON" : "AUTOPLAY OFF";
+
+    private async Task AdvanceAfterPlaybackAsync()
+    {
+        if (_manualStopRequested)
+        {
+            _manualStopRequested = false;
+            return;
+        }
+
+        if (_currentTrack is not null && _repeat == RepeatMode.Track)
+        {
+            await RunActionAsync(() => RunPlayTrackAsync(
+                _currentTrack,
+                isAutoplay: _currentTrackIsAutoplay,
+                resetRadio: false));
             return;
         }
 
@@ -339,20 +437,36 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var nextIndex = _queueIndex + 1;
-        if (nextIndex >= _queue.Count)
+        if (_queue.Count > 0)
         {
-            if (_repeat != RepeatMode.Queue)
+            var nextIndex = _queueIndex + 1;
+            if (nextIndex >= _queue.Count)
             {
-                SetStatus("End of queue.");
-                return;
+                if (_repeat == RepeatMode.Queue)
+                {
+                    nextIndex = 0;
+                }
+                else
+                {
+                    nextIndex = -1;
+                }
             }
 
-            nextIndex = 0;
+            if (nextIndex >= 0)
+            {
+                _queueIndex = nextIndex;
+                await RunActionAsync(() => RunPlayTrackAsync(_queue[_queueIndex]));
+                return;
+            }
         }
 
-        _queueIndex = Math.Max(0, nextIndex);
-        await RunActionAsync(() => RunPlayTrackAsync(_queue[_queueIndex]));
+        if (_autoplay && _currentTrack is not null)
+        {
+            await RunActionAsync(() => BeginNextAutoplayTrackAsync(_lifetime.Token));
+            return;
+        }
+
+        SetStatus(_queue.Count == 0 ? "Playback finished." : "End of queue.");
     }
 
     private async Task SaveStateAsync(CancellationToken cancellationToken)
@@ -371,7 +485,8 @@ public sealed partial class MainWindow : Window
                         LastTrack = _currentTrack,
                         LastPositionSeconds = Math.Max(0, position),
                         Shuffle = _shuffle,
-                        Repeat = _repeat
+                        Repeat = _repeat,
+                        Autoplay = _autoplay
                     },
                     cancellationToken);
             }
@@ -418,6 +533,15 @@ public sealed partial class MainWindow : Window
     private void OnSnapshotChanged(PlaybackSnapshot snapshot) =>
         Dispatcher.UIThread.Post(() => UpdatePlaybackControls(snapshot));
 
+    private void OnMediaNextRequested() => Dispatcher.UIThread.Post(() =>
+        _ = RunActionAsync(() => MoveNextAsync(_lifetime.Token)));
+
+    private void OnMediaPreviousRequested() => Dispatcher.UIThread.Post(() =>
+        _ = RunActionAsync(() => MovePreviousAsync(_lifetime.Token)));
+
+    private void OnMediaStopRequested() => Dispatcher.UIThread.Post(() =>
+        _ = RunActionAsync(() => StopPlaybackAsync(_lifetime.Token)));
+
     private void UpdatePlaybackControls(PlaybackSnapshot snapshot)
     {
         _updatingPlaybackControls = true;
@@ -451,6 +575,7 @@ public sealed partial class MainWindow : Window
         _searchCancellation?.Cancel();
         _resolveCancellation?.Cancel();
         CancelPrefetch();
+        CancelAutoplayPrefetch();
 
         if (_initializationTask is not null)
         {
@@ -471,6 +596,9 @@ public sealed partial class MainWindow : Window
             _mpv.PlaybackEnded -= OnPlaybackEnded;
             _mpv.PlaybackFailed -= OnPlaybackFailed;
             _mpv.SnapshotChanged -= OnSnapshotChanged;
+            _mpv.MediaNextRequested -= OnMediaNextRequested;
+            _mpv.MediaPreviousRequested -= OnMediaPreviousRequested;
+            _mpv.MediaStopRequested -= OnMediaStopRequested;
             await _mpv.DisposeAsync();
         }
 
@@ -513,32 +641,45 @@ public sealed partial class MainWindow : Window
 
     private void BeginPrefetchNextTrack()
     {
-        if (_youtube is null || _currentTrack is null || _shuffle || _queue.Count == 0)
+        if (_youtube is null || _currentTrack is null || _repeat == RepeatMode.Track)
         {
             CancelPrefetch();
+            CancelAutoplayPrefetch();
             return;
         }
 
-        var currentIndex = _queueIndex < 0 ? IndexOf(_queue, _currentTrack.Id) : _queueIndex;
-        var nextIndex = currentIndex < 0 ? 0 : currentIndex + 1;
-        if (nextIndex >= _queue.Count)
+        if (HasExplicitQueuedNextTrack())
         {
-            if (_repeat != RepeatMode.Queue)
+            CancelAutoplayPrefetch();
+            if (_shuffle)
             {
                 CancelPrefetch();
                 return;
             }
 
-            nextIndex = 0;
-        }
+            var nextIndex = GetLinearNextQueueIndex();
+            if (nextIndex < 0)
+            {
+                CancelPrefetch();
+                return;
+            }
 
-        var nextTrack = _queue[nextIndex];
-        if (nextTrack.Id == _currentTrack.Id)
-        {
-            CancelPrefetch();
+            BeginQueuePrefetch(_queue[nextIndex]);
             return;
         }
 
+        CancelPrefetch();
+        if (_autoplay)
+        {
+            BeginAutoplayPrefetch(_currentTrack);
+            return;
+        }
+
+        CancelAutoplayPrefetch();
+    }
+
+    private void BeginQueuePrefetch(Track nextTrack)
+    {
         if (string.Equals(_prefetchTrackId, nextTrack.Id, StringComparison.Ordinal)
             && _prefetchTask is not null)
         {
@@ -556,7 +697,6 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
             Volatile.Write(ref _prefetchStarted, true);
             return await RequireYoutube().ResolveAudioUrlAsync(track, cancellationToken);
         }
@@ -579,6 +719,175 @@ public sealed partial class MainWindow : Window
         _prefetchTask = null;
         _prefetchTrackId = null;
         Volatile.Write(ref _prefetchStarted, false);
+    }
+
+    private bool HasExplicitQueuedNextTrack()
+    {
+        if (_queue.Count == 0)
+        {
+            return false;
+        }
+
+        if (_queueIndex < 0)
+        {
+            return true;
+        }
+
+        if (_shuffle)
+        {
+            return _queue.Count > 1 || _repeat == RepeatMode.Queue;
+        }
+
+        return _queueIndex + 1 < _queue.Count || _repeat == RepeatMode.Queue;
+    }
+
+    private int GetLinearNextQueueIndex()
+    {
+        if (_queue.Count == 0)
+        {
+            return -1;
+        }
+
+        var nextIndex = _queueIndex < 0 ? 0 : _queueIndex + 1;
+        if (nextIndex < _queue.Count)
+        {
+            return nextIndex;
+        }
+
+        return _repeat == RepeatMode.Queue ? 0 : -1;
+    }
+
+    private void BeginAutoplayPrefetch(Track seed)
+    {
+        if (_currentTrackIsAutoplay && _radioIndex + 1 < _radioTracks.Count)
+        {
+            CancelAutoplayPrefetch();
+            return;
+        }
+
+        if (string.Equals(_autoplaySeedId, seed.Id, StringComparison.Ordinal)
+            && _autoplayTask is not null)
+        {
+            return;
+        }
+
+        CancelAutoplayPrefetch();
+        _autoplayCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var token = _autoplayCancellation.Token;
+        _autoplaySeedId = seed.Id;
+        _autoplayTask = PrepareAutoplayTrackAsync(seed, token);
+    }
+
+    private async Task<AutoplayCandidate?> PrepareAutoplayTrackAsync(
+        Track seed,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var excluded = _history
+                .Take(20)
+                .Select(track => track.Id)
+                .Concat(_radioTracks.Select(track => track.Id))
+                .ToHashSet(StringComparer.Ordinal);
+            var related = await RequireYoutube().GetRelatedTracksAsync(
+                seed,
+                excluded,
+                cancellationToken);
+            var track = related.FirstOrDefault();
+            if (track is null)
+            {
+                return null;
+            }
+
+            var url = await RequireYoutube().ResolveAudioUrlAsync(track, cancellationToken);
+            return new AutoplayCandidate(track, url);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException
+                                          or InvalidOperationException
+                                          or JsonException
+                                          or TimeoutException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Autoplay prefetch failed: {exception.Message}");
+            return null;
+        }
+    }
+
+    private async Task BeginNextAutoplayTrackAsync(CancellationToken cancellationToken)
+    {
+        if (_currentTrackIsAutoplay && _radioIndex + 1 < _radioTracks.Count)
+        {
+            _radioIndex++;
+            await RunPlayTrackAsync(
+                _radioTracks[_radioIndex],
+                isAutoplay: true,
+                resetRadio: false);
+            return;
+        }
+
+        if (_currentTrack is null)
+        {
+            return;
+        }
+
+        BeginAutoplayPrefetch(_currentTrack);
+        var task = _autoplayTask;
+        var candidate = task is null ? null : await task.WaitAsync(cancellationToken);
+        if (!ReferenceEquals(task, _autoplayTask))
+        {
+            return;
+        }
+
+        _autoplayCancellation?.Dispose();
+        _autoplayCancellation = null;
+        _autoplayTask = null;
+        _autoplaySeedId = null;
+        if (candidate is null)
+        {
+            _currentTrackIsAutoplay = false;
+            SetStatus("Autoplay could not find a related track.");
+            return;
+        }
+
+        if (!_currentTrackIsAutoplay)
+        {
+            _radioTracks.Clear();
+            _radioTracks.Add(_currentTrack);
+            _radioIndex = 0;
+        }
+
+        if (_radioIndex + 1 < _radioTracks.Count)
+        {
+            _radioTracks.RemoveRange(_radioIndex + 1, _radioTracks.Count - _radioIndex - 1);
+        }
+
+        _radioTracks.Add(candidate.Track);
+        _radioIndex = _radioTracks.Count - 1;
+        await RunPlayTrackAsync(
+            candidate.Track,
+            candidate.Url,
+            isAutoplay: true,
+            resetRadio: false);
+    }
+
+    private void CancelAutoplayPrefetch()
+    {
+        _autoplayCancellation?.Cancel();
+        _autoplayCancellation?.Dispose();
+        _autoplayCancellation = null;
+        _autoplayTask = null;
+        _autoplaySeedId = null;
+    }
+
+    private void ResetRadioSession()
+    {
+        CancelAutoplayPrefetch();
+        _radioTracks.Clear();
+        _radioIndex = -1;
+        _currentTrackIsAutoplay = false;
     }
 
     private void ToggleFavorite(Track? track)
@@ -695,17 +1004,15 @@ public sealed partial class MainWindow : Window
         await RunActionAsync(() => TogglePauseAsync(_lifetime.Token));
 
     private async void OnStopClick(object? sender, RoutedEventArgs e) =>
-        await RunActionAsync(async () =>
-        {
-            await RequireMpv().StopAsync(_lifetime.Token);
-            SetStatus("Stopped.");
-        });
+        await RunActionAsync(() => StopPlaybackAsync(_lifetime.Token));
 
     private async void OnPreviousClick(object? sender, RoutedEventArgs e) =>
-        await RunActionAsync(() => MoveQueueAsync(-1, wrap: true, _lifetime.Token));
+        await RunActionAsync(() => MovePreviousAsync(_lifetime.Token));
 
     private async void OnNextClick(object? sender, RoutedEventArgs e) =>
-        await RunActionAsync(() => MoveQueueAsync(1, wrap: true, _lifetime.Token));
+        await RunActionAsync(() => MoveNextAsync(_lifetime.Token));
+
+    private void OnAutoplayClick(object? sender, RoutedEventArgs e) => ToggleAutoplay();
 
     private void OnToggleFavoriteClick(object? sender, RoutedEventArgs e) => ToggleFavorite(_currentTrack);
 
@@ -775,15 +1082,19 @@ public sealed partial class MainWindow : Window
                 break;
             case Key.N:
                 e.Handled = true;
-                await RunActionAsync(() => MoveQueueAsync(1, wrap: true, _lifetime.Token));
+                await RunActionAsync(() => MoveNextAsync(_lifetime.Token));
                 break;
             case Key.P:
                 e.Handled = true;
-                await RunActionAsync(() => MoveQueueAsync(-1, wrap: true, _lifetime.Token));
+                await RunActionAsync(() => MovePreviousAsync(_lifetime.Token));
                 break;
             case Key.S when _mpv is not null:
                 e.Handled = true;
-                await RunActionAsync(() => _mpv.StopAsync(_lifetime.Token));
+                await RunActionAsync(() => StopPlaybackAsync(_lifetime.Token));
+                break;
+            case Key.Y:
+                e.Handled = true;
+                ToggleAutoplay();
                 break;
         }
     }
@@ -882,4 +1193,6 @@ public sealed partial class MainWindow : Window
 
         return $"{value.Minutes:00}:{value.Seconds:00}";
     }
+
+    private sealed record AutoplayCandidate(Track Track, string Url);
 }
