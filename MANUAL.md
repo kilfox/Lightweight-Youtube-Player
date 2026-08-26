@@ -57,7 +57,13 @@ The Windows package includes yt-dlp, mpv, and Deno. Installation does not requir
    sh ./install.sh
    ```
 
-6. Open a new terminal and run `lightytp`.
+6. Open a new terminal and update the playback tools:
+
+   ```shell
+   lightytp update
+   ```
+
+7. Run `lightytp` after the update completes.
 
 If macOS blocks the unsigned open-source executable, open **System Settings → Privacy & Security**, allow LightYTP, and launch it again.
 
@@ -92,7 +98,7 @@ To update playback tools when YouTube changes cause problems:
 lightytp update
 ```
 
-Windows updates its bundled tools. macOS and Linux display the appropriate package-manager guidance.
+The Windows and macOS terminal editions require this command once before their first launch and again after each LightYTP version upgrade. Windows updates its bundled tools, while macOS upgrades yt-dlp, mpv, and Deno through Homebrew. Linux displays package-manager guidance because distributions use different package managers.
 
 To uninstall the terminal edition, run:
 
@@ -148,9 +154,13 @@ Queue controls:
 - `Delete`: remove the selected queue entry.
 - `Up` / `Down`: change the selected queue entry.
 
-When a queued track finishes normally, the next entry starts automatically. LightYTP resolves only the next queued track after a short idle delay so normal queue transitions are faster without competing with searches. If that resolution is already running when you press `n`, LightYTP reuses it instead of starting another process. Search results and resolved stream URLs are kept in a small, time-limited memory cache that is cleared when LightYTP exits. The queue itself is saved locally and restored the next time LightYTP starts.
+When a queued track finishes normally, the next entry starts automatically. LightYTP immediately resolves only the next queued track so normal queue transitions are faster without resolving the entire queue. If that resolution is already running when you press `n`, LightYTP reuses it instead of starting another process. Search results and resolved stream URLs are kept in a small, time-limited memory cache that is cleared when LightYTP exits. The queue itself is saved locally and restored the next time LightYTP starts.
 
 Press `x` to toggle shuffle. Press `r` to cycle between repeat off, repeat track, and repeat queue.
+
+Press `y` to toggle autoplay radio. It is off by default and the choice is saved. When enabled, LightYTP prepares one related track in the background. If the current track finishes naturally and no queued track, shuffle choice, or repeat mode has priority, the prepared track starts without being added to the saved queue. YouTube Mix results are preferred; a related-song search is used when no usable Mix result is available. The current track, the 20 most recent history entries, and tracks already used in the radio session are excluded.
+
+Once radio playback starts, `n` moves forward and `p` moves backward through that session. Selecting a track manually or starting an explicit queued track ends the radio session. Searching, changing the queue, changing tracks, or switching autoplay off cancels stale preparation. Stopping playback never starts autoplay. If no recommendation can be prepared, playback remains idle and a short status message is shown.
 
 ## 8. Use playback history
 
@@ -176,12 +186,15 @@ Press `f` on a selected or currently playing track to add or remove it from loca
 | `Right` | Seek forward five seconds |
 | `+` or `=` | Increase volume by 5% |
 | `-` or `_` | Decrease volume by 5% |
-| `n` | Next queued track |
-| `p` | Previous queued track |
+| `n` | Next queued track or radio track |
+| `p` | Previous queued track or radio track |
 | `s` | Stop playback |
 | `x` | Toggle queue shuffle |
 | `r` | Cycle repeat mode |
+| `y` | Toggle autoplay radio |
 | `F5` | Resume the last track and saved position |
+
+LightYTP accepts system media buttons on keyboards, headsets, and earbuds for play, pause, stop, and queued or radio previous/next tracks on Windows and macOS. The operating system decides which active media app receives them. Linux media-button behavior depends on the desktop environment.
 
 The volume is saved when the program exits normally.
 
@@ -233,7 +246,7 @@ Files in this directory include:
 
 - `settings.json`: saved volume and configured tool paths.
 - `history.json`: the last 100 played tracks.
-- `library.json`: queue, favorites, shuffle/repeat state, and resume position.
+- `library.json`: queue, favorites, shuffle/repeat/autoplay state, and resume position.
 - `mpv.log`: detailed playback-engine diagnostics.
 
 LightYTP does not read browser profiles, browser cookies, passwords, or YouTube account credentials.

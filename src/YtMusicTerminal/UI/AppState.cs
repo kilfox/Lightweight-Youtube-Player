@@ -54,6 +54,8 @@ public sealed class AppState
 
     public RepeatMode Repeat { get; set; }
 
+    public bool Autoplay { get; set; }
+
     public Track? SelectedTrack => Focus switch
     {
         FocusPane.Results => ItemAt(SearchResults, SelectedResult),

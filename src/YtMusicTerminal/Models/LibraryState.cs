@@ -20,4 +20,6 @@ public sealed record LibraryState
     public bool Shuffle { get; init; }
 
     public RepeatMode Repeat { get; init; }
+
+    public bool Autoplay { get; init; }
 }

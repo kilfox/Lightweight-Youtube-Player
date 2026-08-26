@@ -41,6 +41,12 @@ public sealed class MpvClient : IAsyncDisposable
 
     public event Action<PlaybackSnapshot>? SnapshotChanged;
 
+    public event Action? MediaNextRequested;
+
+    public event Action? MediaPreviousRequested;
+
+    public event Action? MediaStopRequested;
+
     public PlaybackSnapshot Snapshot
     {
         get
@@ -102,6 +108,7 @@ public sealed class MpvClient : IAsyncDisposable
             "--audio-display=no",
             "--terminal=no",
             "--input-default-bindings=no",
+            "--input-media-keys=yes",
             "--load-scripts=no",
             "--osc=no",
             "--osd-level=0",
@@ -201,6 +208,7 @@ public sealed class MpvClient : IAsyncDisposable
         await ObserveAsync(3, "pause", cancellationToken).ConfigureAwait(false);
         await ObserveAsync(4, "volume", cancellationToken).ConfigureAwait(false);
         await ObserveAsync(5, "idle-active", cancellationToken).ConfigureAwait(false);
+        await ConfigureMediaKeysAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task LoadAsync(string url, CancellationToken cancellationToken)
@@ -270,6 +278,32 @@ public sealed class MpvClient : IAsyncDisposable
 
     private Task ObserveAsync(int observerId, string property, CancellationToken cancellationToken) =>
         SendCommandAsync(["observe_property", observerId, property], cancellationToken);
+
+    private async Task ConfigureMediaKeysAsync(CancellationToken cancellationToken)
+    {
+        (string Key, string Command)[] bindings =
+        [
+            ("PLAY", "set pause no"),
+            ("PAUSE", "set pause yes"),
+            ("PLAYPAUSE", "cycle pause"),
+            ("PLAYONLY", "set pause no"),
+            ("PAUSEONLY", "set pause yes"),
+            ("STOP", "script-message lightytp-media-stop"),
+            ("NEXT", "script-message lightytp-media-next"),
+            ("PREV", "script-message lightytp-media-previous"),
+            ("XF86_PAUSE", "cycle pause"),
+            ("XF86_STOP", "script-message lightytp-media-stop"),
+            ("XF86_NEXT", "script-message lightytp-media-next"),
+            ("XF86_PREV", "script-message lightytp-media-previous")
+        ];
+
+        foreach (var (key, command) in bindings)
+        {
+            await SendCommandAsync(
+                ["keybind", key, command, "LightYTP media control"],
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     private async Task RestartAsync(CancellationToken cancellationToken)
     {
@@ -432,6 +466,33 @@ public sealed class MpvClient : IAsyncDisposable
                 break;
             case "end-file":
                 HandleEndFile(message);
+                break;
+            case "client-message":
+                HandleClientMessage(message);
+                break;
+        }
+    }
+
+    private void HandleClientMessage(JsonElement message)
+    {
+        if (!message.TryGetProperty("args", out var arguments)
+            || arguments.ValueKind != JsonValueKind.Array
+            || arguments.GetArrayLength() == 0
+            || arguments[0].ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        switch (arguments[0].GetString())
+        {
+            case "lightytp-media-next":
+                MediaNextRequested?.Invoke();
+                break;
+            case "lightytp-media-previous":
+                MediaPreviousRequested?.Invoke();
+                break;
+            case "lightytp-media-stop":
+                MediaStopRequested?.Invoke();
                 break;
         }
     }

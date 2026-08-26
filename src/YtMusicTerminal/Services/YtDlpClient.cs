@@ -12,6 +12,7 @@ public sealed class YtDlpClient
     private static readonly TimeSpan AudioUrlCacheLifetime = TimeSpan.FromMinutes(15);
     private const int SearchCacheCapacity = 10;
     private const int AudioUrlCacheCapacity = 100;
+    private const int RelatedTrackLimit = 15;
 
     private readonly string _executable;
     private readonly IProcessRunner _processRunner;
@@ -162,6 +163,64 @@ public sealed class YtDlpClient
         return url;
     }
 
+    public async Task<IReadOnlyList<Track>> GetRelatedTracksAsync(
+        Track seed,
+        IReadOnlySet<string> excludedTrackIds,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var excluded = new HashSet<string>(excludedTrackIds, StringComparer.Ordinal)
+        {
+            seed.Id
+        };
+
+        try
+        {
+            var mixUrl = $"https://www.youtube.com/watch?v={Uri.EscapeDataString(seed.Id)}&list=RD{Uri.EscapeDataString(seed.Id)}";
+            var result = await _processRunner.RunAsync(
+                _executable,
+                [
+                    "--ignore-config",
+                    "--no-warnings",
+                    "--dump-single-json",
+                    "--flat-playlist",
+                    "--playlist-end",
+                    RelatedTrackLimit.ToString(CultureInfo.InvariantCulture),
+                    mixUrl
+                ],
+                Path.GetDirectoryName(_executable),
+                _environment,
+                SearchTimeout,
+                cancellationToken).ConfigureAwait(false);
+
+            if (result.ExitCode == 0)
+            {
+                var mixTracks = FilterRelatedTracks(ParseSearchResponse(result.StandardOutput), excluded);
+                if (mixTracks.Count > 0)
+                {
+                    return mixTracks;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException
+                                          or IOException
+                                          or JsonException
+                                          or TimeoutException)
+        {
+            // A Mix is not available for every video. Search below is the recovery path.
+        }
+
+        var fallback = await SearchAsync(
+            $"{seed.Artist} {seed.Title} similar songs",
+            RelatedTrackLimit,
+            cancellationToken).ConfigureAwait(false);
+        return FilterRelatedTracks(fallback, excluded);
+    }
+
     public void InvalidateAudioUrl(string trackId)
     {
         lock (_cacheLock)
@@ -211,6 +270,29 @@ public sealed class YtDlpClient
         }
 
         return tracks;
+    }
+
+    private static IReadOnlyList<Track> FilterRelatedTracks(
+        IEnumerable<Track> tracks,
+        IReadOnlySet<string> excludedTrackIds)
+    {
+        var seen = new HashSet<string>(excludedTrackIds, StringComparer.Ordinal);
+        var eligible = new List<Track>();
+        foreach (var track in tracks)
+        {
+            if (!seen.Add(track.Id))
+            {
+                continue;
+            }
+
+            eligible.Add(track);
+            if (eligible.Count == RelatedTrackLimit)
+            {
+                break;
+            }
+        }
+
+        return eligible;
     }
 
     private static Track? ParseTrack(JsonElement entry)

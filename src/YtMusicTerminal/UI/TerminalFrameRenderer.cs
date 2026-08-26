@@ -109,7 +109,7 @@ public sealed class TerminalFrameRenderer
                 historyHeight - 2);
         }
 
-        var modes = $"{(state.Shuffle ? "Shuffle on" : "Shuffle off")} | Repeat {state.Repeat.ToString().ToLowerInvariant()}";
+        var modes = $"{(state.Shuffle ? "Shuffle on" : "Shuffle off")} | Repeat {state.Repeat.ToString().ToLowerInvariant()} | Autoplay {(state.Autoplay ? "on" : "off")}";
         canvas.Box(
             0,
             playerY,
@@ -120,7 +120,7 @@ public sealed class TerminalFrameRenderer
 
         var busy = state.IsSearching ? "Searching...  " : state.IsResolving ? "Loading track...  " : string.Empty;
         var help = state.ShowHelp
-            ? "Esc player | Up/Down volume | Tab panes | Enter play | m more | Space pause | Ctrl+Q quit"
+            ? "Esc player | Up/Down volume | Enter play | Space pause | y autoplay | Ctrl+Q quit"
             : "? help  |  Ctrl+Q quit  |  " + busy + state.StatusMessage;
         canvas.Write(0, height - 1, help, width);
         canvas.Style(0, height - 1, width, Dim);
