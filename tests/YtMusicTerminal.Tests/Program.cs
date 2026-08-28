@@ -18,9 +18,21 @@ internal static class Program
             ("Formats playback duration", FormatDurationAsync),
             ("Builds safe edition-specific uninstall plans", UninstallPlansAsync),
             ("Requires one playback-tool update per app version", ToolUpdateGateAsync),
+            ("Selects app upgrades for all release platforms", AppUpgradeTests.AssetSelectionAsync),
+            ("Downloads and verifies an app release", AppUpgradeTests.PrepareAsync),
+            ("Checks startup upgrade availability without downloading", AppUpgradeTests.StartupNoticeAsync),
+            ("Rejects unsafe or incomplete app releases", AppUpgradeTests.RejectBadReleasesAsync),
+            ("Extracts Unix upgrades safely and replaces atomically on Unix", AppUpgradeTests.UnixArchiveAndInstallAsync),
+            ("Installs after parent exit with the Windows upgrade helper", AppUpgradeTests.WindowsHelperAsync),
+            ("Reports failed Windows upgrades and retains recovery files", AppUpgradeTests.WindowsHelperFailureAsync),
+            ("Handles upgrade CLI options before playback checks", AppUpgradeTests.CliAsync),
             ("Deduplicates bounded history newest-first", HistoryStoreAsync),
             ("Persists queue, favorites, and resume state", LibraryStoreAsync)
         };
+        if (args.Contains("--upgrade-live", StringComparer.Ordinal))
+        {
+            tests.Add(("Downloads and verifies a live release without installing", AppUpgradeTests.LiveDownloadAsync));
+        }
         if (args.Contains("--live", StringComparer.Ordinal))
         {
             tests.Add(("Extracts a Mix recommendation and starts muted playback", LivePlaybackAsync));
@@ -112,6 +124,13 @@ internal static class Program
         state.Focus = FocusPane.Player;
         frame = new TerminalFrameRenderer().Render(state, 100, 30);
         Contains("● Now playing", frame);
+        state.UpgradeNotice = "App v0.6.0 available - quit, run: lightytp upgrade";
+        state.StatusMessage = "Playing Test Song.";
+        frame = new TerminalFrameRenderer().Render(state, 70, 18);
+        Contains(state.UpgradeNotice, frame);
+        state.ShowHelp = true;
+        frame = new TerminalFrameRenderer().Render(state, 70, 18);
+        Contains(state.UpgradeNotice, frame);
         return Task.CompletedTask;
     }
 

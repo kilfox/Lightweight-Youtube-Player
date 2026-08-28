@@ -55,7 +55,8 @@ public sealed class PlayerApplication : IAsyncDisposable
         LibraryStore libraryStore,
         YtDlpClient youtube,
         MpvClient mpv,
-        string? startupInput = null)
+        string? startupInput = null,
+        string? upgradeNotice = null)
     {
         _initialSettings = settings;
         _settingsStore = settingsStore;
@@ -64,7 +65,7 @@ public sealed class PlayerApplication : IAsyncDisposable
         _youtube = youtube;
         _mpv = mpv;
         _startupInput = startupInput;
-        _state = new AppState { Playback = PlaybackSnapshot.Initial(settings.Volume) };
+        _state = new AppState { Playback = PlaybackSnapshot.Initial(settings.Volume), UpgradeNotice = upgradeNotice };
 
         _mpv.PlaybackEnded += OnPlaybackEnded;
         _mpv.PlaybackFailed += OnPlaybackFailed;

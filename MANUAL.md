@@ -92,7 +92,21 @@ lightytp "Daft Punk Get Lucky"
 lightytp "https://www.youtube.com/watch?v=..."
 ```
 
-To update playback tools when YouTube changes cause problems:
+To upgrade the installed terminal app to the latest stable GitHub release:
+
+```shell
+lightytp upgrade
+```
+
+Close all other terminal-player windows first. The command downloads the package for your platform and architecture and verifies the release's SHA-256 checksum before installing. Favorites, history, queue, and settings are preserved. It does not upgrade the separate GUI edition. Portable/source copies must use the release installer first.
+
+You do not need to uninstall an older version. Simply rerun the new release's installer in the same location. From v0.6.0, normal launches check GitHub for app upgrades with a two-second timeout and show the upgrade command in a persistent header. A failed check does not prevent playback. Required playback-tool updates on Windows/macOS are shown separately with `lightytp update`; those tools must be refreshed once per app version. Nothing is installed without running the corresponding command.
+
+On Windows, a background helper installs after this command exits. Wait for `Upgrade complete` in `%LOCALAPPDATA%\YtMusicTerminal\upgrade.log` before running `lightytp --version` or launching the player. Failures and the retained download location are written to the same log. On macOS/Linux, replacement finishes before the command returns. Downloads can be cancelled with `Ctrl+C`; an already scheduled Windows installation must be allowed to finish.
+
+Versions 0.5.0 and older do not support `upgrade`. Install a newer release manually once to gain the command. If GitHub is unreachable or a download fails validation, the command reports the error and leaves the installed app unchanged. Use the [latest release page](https://github.com/kilfox/Lightweight-Youtube-Player/releases/latest) for manual installation.
+
+To update **playback tools**, not the app itself, when YouTube changes cause problems:
 
 ```shell
 lightytp update

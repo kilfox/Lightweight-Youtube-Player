@@ -33,7 +33,7 @@ public sealed class TerminalFrameRenderer
         var queueHeight = Math.Max(5, mainHeight / 2);
         var historyHeight = mainHeight - queueHeight;
 
-        const string brandText = "◆ LIGHTWEIGHT YOUTUBE PLAYER ◆  by KH!";
+        var brandText = state.UpgradeNotice ?? "◆ LIGHTWEIGHT YOUTUBE PLAYER ◆  by KH!";
         var brandX = Math.Max(0, (width - brandText.Length) / 2);
         canvas.Write(brandX, 0, brandText, width);
         canvas.Style(brandX, 0, Math.Min(brandText.Length, width - brandX), Brand);

@@ -56,6 +56,11 @@ internal static class Program
             return Uninstall(options.AssumeYes);
         }
 
+        if (options.Upgrade)
+        {
+            return await UpgradeAsync().ConfigureAwait(false);
+        }
+
         var appPaths = AppPaths.CreateDefault();
         var toolUpdateMarker = Path.Combine(appPaths.DataDirectory, "tools-update-version.txt");
 
@@ -64,10 +69,19 @@ internal static class Program
             return await UpdateToolsAsync(toolUpdateMarker).ConfigureAwait(false);
         }
 
+        var upgradeNotice = !options.Diagnose && !options.SmokeTest
+            ? await GetStartupUpgradeNoticeAsync().ConfigureAwait(false)
+            : null;
+
         if ((OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
             && !options.Diagnose
             && ToolUpdateGate.IsRequired(toolUpdateMarker, Version))
         {
+            if (upgradeNotice is not null)
+            {
+                Console.Error.WriteLine(upgradeNotice);
+                Console.Error.WriteLine();
+            }
             PrintRequiredFirstRunUpdate();
             return 2;
         }
@@ -144,7 +158,8 @@ internal static class Program
                 library,
                 youtube,
                 mpv,
-                options.StartupInput);
+                options.StartupInput,
+                upgradeNotice);
             await application.RunAsync(cancellation.Token).ConfigureAwait(false);
             return 0;
         }
@@ -156,6 +171,110 @@ internal static class Program
         {
             Console.Error.WriteLine($"ytmusic failed: {exception.Message}");
             return 1;
+        }
+    }
+
+    private static async Task<string?> GetStartupUpgradeNoticeAsync()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using var httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        try
+        {
+            var platform = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "macos" : OperatingSystem.IsLinux() ? "linux" : "unknown";
+            var assetName = AppUpgradeService.GetAssetName(platform, RuntimeInformation.ProcessArchitecture);
+            return await new AppUpgradeService(httpClient).GetUpgradeNoticeAsync(
+                System.Version.Parse(Version), assetName, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException or IOException
+            or JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or PlatformNotSupportedException)
+        {
+            return "Upgrade check unavailable. Retry later: lightytp upgrade";
+        }
+    }
+
+    private static async Task<int> UpgradeAsync()
+    {
+        var executablePath = Environment.ProcessPath;
+        var expectedName = OperatingSystem.IsWindows() ? "lightytp.exe" : "lightytp";
+        if (executablePath is null || !Path.GetFileName(executablePath).Equals(expectedName, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"Run 'lightytp upgrade' from an installed terminal edition. For portable or source copies, install from {AppUpgradeService.ReleasesUrl}");
+            return 2;
+        }
+
+        string? stagingDirectory = null;
+        var scheduled = false;
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+        ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            cancellation.Cancel();
+        };
+        Console.CancelKeyPress += cancelHandler;
+        try
+        {
+            AppUpgradeService.EnsureNoOtherInstances();
+            Console.WriteLine("Checking GitHub for the latest LightYTP terminal release...");
+            var platform = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "macos" : OperatingSystem.IsLinux() ? "linux" : "unknown";
+            var assetName = AppUpgradeService.GetAssetName(platform, RuntimeInformation.ProcessArchitecture);
+            stagingDirectory = Directory.CreateTempSubdirectory("lightytp-upgrade-").FullName;
+            using var httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+            var upgrade = await new AppUpgradeService(httpClient).PrepareAsync(
+                System.Version.Parse(Version), assetName, stagingDirectory, Console.WriteLine, cancellation.Token).ConfigureAwait(false);
+            if (upgrade is null)
+            {
+                return 0;
+            }
+
+            cancellation.Token.ThrowIfCancellationRequested();
+            AppUpgradeService.EnsureNoOtherInstances();
+            if (OperatingSystem.IsWindows())
+            {
+                var dataDirectory = AppPaths.CreateDefault().DataDirectory;
+                Directory.CreateDirectory(dataDirectory);
+                var logPath = Path.Combine(dataDirectory, "upgrade.log");
+                File.WriteAllText(logPath, $"Preparing to install {upgrade.Version}...{Environment.NewLine}");
+                AppUpgradeService.ScheduleWindows(upgrade, Path.GetDirectoryName(executablePath)!, logPath, Environment.ProcessId);
+                scheduled = true;
+                Console.WriteLine($"Installing {upgrade.Version} in the background after this command exits. This is not complete yet.");
+                Console.WriteLine($"Wait for 'Upgrade complete' in: {logPath}");
+                Console.WriteLine("Then run: lightytp --version");
+            }
+            else
+            {
+                AppUpgradeService.InstallUnix(upgrade, executablePath);
+                Console.WriteLine($"Installed LightYTP {upgrade.Version}. Run lightytp --version to check.");
+            }
+            Console.WriteLine("Library and settings are preserved. On Windows/macOS, run lightytp update before launching the new version.");
+            return 0;
+        }
+        catch (OperationCanceledException)
+        {
+            Console.Error.WriteLine("App upgrade cancelled or timed out. Nothing was installed.");
+            return 1;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or UnauthorizedAccessException
+            or JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException
+            or PlatformNotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            Console.Error.WriteLine($"App upgrade failed: {exception.Message}");
+            Console.Error.WriteLine($"You can install manually from {AppUpgradeService.ReleasesUrl}");
+            return 1;
+        }
+        finally
+        {
+            Console.CancelKeyPress -= cancelHandler;
+            if (!scheduled && stagingDirectory is not null)
+            {
+                try
+                {
+                    Directory.Delete(stagingDirectory, recursive: true);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    Console.Error.WriteLine($"Could not remove temporary download directory {stagingDirectory}: {exception.Message}");
+                }
+            }
         }
     }
 
@@ -286,10 +405,11 @@ internal static class Program
 
     private static void PrintRequiredFirstRunUpdate()
     {
-        Console.Error.WriteLine("LightYTP requires a one-time playback-tool update before first use.");
+        Console.Error.WriteLine($"LightYTP {Version}: you MUST update playback tools before using this version.");
         Console.Error.WriteLine();
         Console.Error.WriteLine("Run:");
         Console.Error.WriteLine("  lightytp update");
+        Console.Error.WriteLine("This updates yt-dlp, mpv, and Deno; 'lightytp upgrade' updates the app itself.");
         Console.Error.WriteLine();
         Console.Error.WriteLine("After the update completes, start LightYTP again.");
     }
@@ -460,6 +580,7 @@ internal static class Program
               --diagnose       Print dependency versions and paths
               --smoke-test     Search and start muted playback, then print memory use
               update           Update yt-dlp, mpv, and Deno, then exit
+              upgrade          Install the latest terminal app release from GitHub
               uninstall        Uninstall the terminal edition
               uninstall --yes  Uninstall without a confirmation prompt
               --version        Print application version
@@ -522,6 +643,7 @@ internal static class Program
         bool Diagnose,
         bool SmokeTest,
         bool UpdateTools,
+        bool Upgrade,
         bool Uninstall,
         bool AssumeYes,
         string? YtDlpPath,
@@ -535,6 +657,7 @@ internal static class Program
             var diagnose = false;
             var smokeTest = false;
             var updateTools = false;
+            var upgrade = false;
             var uninstall = false;
             var assumeYes = false;
             string? ytDlp = null;
@@ -561,6 +684,9 @@ internal static class Program
                     case "update":
                         updateTools = true;
                         break;
+                    case "upgrade":
+                        upgrade = true;
+                        break;
                     case "uninstall":
                         uninstall = true;
                         break;
@@ -585,12 +711,12 @@ internal static class Program
                 }
             }
 
-            if (updateTools && uninstall)
+            if ((updateTools ? 1 : 0) + (upgrade ? 1 : 0) + (uninstall ? 1 : 0) > 1)
             {
-                throw new ArgumentException("Choose either 'update' or 'uninstall', not both.");
+                throw new ArgumentException("Choose only one command: 'update', 'upgrade', or 'uninstall'.");
             }
 
-            if ((updateTools || uninstall) && startupInput.Count > 0)
+            if ((updateTools || upgrade || uninstall) && startupInput.Count > 0)
             {
                 throw new ArgumentException("Commands cannot be combined with a search or URL.");
             }
@@ -600,12 +726,18 @@ internal static class Program
                 throw new ArgumentException("Option '--yes' can only be used with 'uninstall'.");
             }
 
+            if (upgrade && (diagnose || smokeTest || version || ytDlp is not null || mpv is not null))
+            {
+                throw new ArgumentException("Run 'lightytp upgrade' without playback or diagnostic options.");
+            }
+
             return new CliOptions(
                 help,
                 version,
                 diagnose,
                 smokeTest,
                 updateTools,
+                upgrade,
                 uninstall,
                 assumeYes,
                 ytDlp,

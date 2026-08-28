@@ -130,7 +130,25 @@ Inside the player:
 4. Press `Escape` to focus the player controls.
 5. Use `Up` and `Down` for volume, `Space` to pause, and `Left` or `Right` to seek.
 
-Update playback tools when YouTube changes cause search or playback problems:
+## Upgrade the terminal app
+
+No uninstall is needed: rerun the new release's installer over your existing installation. Favorites, history, queue, and settings are kept.
+
+Starting with v0.6.0, get the latest stable terminal release from GitHub with:
+
+```shell
+lightytp upgrade
+```
+
+Close other terminal-player windows first. The command selects the correct Windows, macOS, or Linux package, verifies its SHA-256 checksum, and upgrades the installed terminal edition without changing your library or settings. Custom installer locations are supported; run the installed `lightytp` command, not a portable `ytmusic` executable.
+
+On Windows, installation finishes in the background after the command exits. Wait for **Upgrade complete** in `%LOCALAPPDATA%\YtMusicTerminal\upgrade.log`, then check `lightytp --version`. Errors are recorded in that same log. On macOS and Linux the command completes the replacement before returning.
+
+Each normal terminal launch checks GitHub for a newer app release (two-second timeout). When available, a persistent header shows `lightytp upgrade`. If the check is unavailable, the player still opens and shows a retry notice. On Windows/macOS, a required playback-tool refresh instead explains that you **MUST** run `lightytp update` before using this app version. No update is installed automatically.
+
+Version 0.5.0 and older do **not** include `upgrade`: install a newer release manually once to get this command. This command upgrades only the terminal edition; download GUI upgrades from the [latest release](https://github.com/kilfox/Lightweight-Youtube-Player/releases/latest).
+
+`lightytp update` is separate: it updates playback tools, **not LightYTP itself**. Run it before launching a new app version on Windows/macOS, or when YouTube changes cause search or playback problems:
 
 ```shell
 lightytp update

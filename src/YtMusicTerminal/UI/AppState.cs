@@ -42,6 +42,8 @@ public sealed class AppState
 
     public string StatusMessage { get; set; } = "Type a search and press Enter.";
 
+    public string? UpgradeNotice { get; set; }
+
     public bool IsSearching { get; set; }
 
     public bool IsResolving { get; set; }
