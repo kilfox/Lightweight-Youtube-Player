@@ -281,10 +281,12 @@ public sealed class MpvClient : IAsyncDisposable
 
     private async Task ConfigureMediaKeysAsync(CancellationToken cancellationToken)
     {
+        // mpv routes macOS togglePlayPauseCommand to PLAY, not PLAYONLY.
+        // PLAY/PAUSE toggle; only PLAYONLY/PAUSEONLY request a specific state.
         const string section =
             """
-            PLAY set pause no
-            PAUSE set pause yes
+            PLAY cycle pause
+            PAUSE cycle pause
             PLAYPAUSE cycle pause
             PLAYONLY set pause no
             PAUSEONLY set pause yes
@@ -345,7 +347,7 @@ public sealed class MpvClient : IAsyncDisposable
         }
     }
 
-    private async Task SendCommandAsync(IReadOnlyList<object?> command, CancellationToken cancellationToken)
+    internal async Task<JsonElement> SendCommandAsync(IReadOnlyList<object?> command, CancellationToken cancellationToken)
     {
         var writer = _writer ?? throw new InvalidOperationException("mpv is not running.");
         var requestId = Interlocked.Increment(ref _requestId);
@@ -393,6 +395,8 @@ public sealed class MpvClient : IAsyncDisposable
         {
             throw new InvalidOperationException($"mpv command failed: {error}");
         }
+
+        return response;
     }
 
     private async Task ReadMessagesAsync(CancellationToken cancellationToken)

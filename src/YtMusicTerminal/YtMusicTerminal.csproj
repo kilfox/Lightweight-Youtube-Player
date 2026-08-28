@@ -4,10 +4,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>ytmusic</AssemblyName>
     <RootNamespace>YtMusicTerminal</RootNamespace>
-    <Version>0.6.0</Version>
+    <Version>0.6.1</Version>
     <IsAotCompatible>true</IsAotCompatible>
     <InvariantGlobalization>false</InvariantGlobalization>
     <StripSymbols>true</StripSymbols>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="YtMusicTerminal.Tests" />
+  </ItemGroup>
 </Project>

@@ -100,7 +100,7 @@
 
           <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,5" ColumnDefinitions="Auto,*,Auto">
             <TextBlock x:Name="PositionText" Grid.Column="0" Text="00:00" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <Slider x:Name="PositionSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="0" PointerReleased="OnPositionReleased" />
+            <Slider x:Name="PositionSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="0" />
             <TextBlock x:Name="DurationText" Grid.Column="2" Text="00:00" VerticalAlignment="Center" Margin="8,0,0,0" />
           </Grid>
 
@@ -210,7 +210,11 @@
 
         <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="2,4,2,0">
           <TextBlock x:Name="StatusText" Grid.Column="0" Text="Starting..." Foreground="#879874" FontSize="11" TextTrimming="CharacterEllipsis" />
-          <Button Grid.Column="1" Classes="uninstall" Content="UNINSTALL" ToolTip.Tip="Remove LightYTP GUI" Click="OnUninstallClick" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+            <Button Classes="uninstall" Content="UPDATE TOOLS" ToolTip.Tip="Update yt-dlp, mpv, and Deno" Click="OnUpdateToolsClick" />
+            <Button Classes="uninstall" Content="UPGRADE APP" ToolTip.Tip="Open the latest LightYTP release" Click="OnUpgradeClick" />
+            <Button Classes="uninstall" Content="UNINSTALL" ToolTip.Tip="Remove LightYTP GUI" Click="OnUninstallClick" />
+          </StackPanel>
           <TextBlock Grid.Column="2" Text="CTRL+F SEARCH  •  SPACE PLAY/PAUSE  •  CTRL+Q QUIT" Foreground="#596650" FontSize="10" VerticalAlignment="Center" />
         </Grid>
       </Grid>

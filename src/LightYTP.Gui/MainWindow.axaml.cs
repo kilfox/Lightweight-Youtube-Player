@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -54,6 +55,7 @@ public sealed partial class MainWindow : Window
     private bool _manualStopRequested;
     private int _searchLimit = SearchBatchSize;
     private bool _updatingPlaybackControls;
+    private bool _positionSliderDragging;
     private bool _isClosing;
     private bool _closeCompleted;
 
@@ -65,6 +67,17 @@ public sealed partial class MainWindow : Window
     public MainWindow(IReadOnlyList<string> args)
     {
         InitializeComponent();
+
+        PositionSlider.AddHandler(
+            InputElement.PointerPressedEvent,
+            OnPositionPressed,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+        PositionSlider.AddHandler(
+            InputElement.PointerReleasedEvent,
+            OnPositionReleased,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
 
         _startupInput = args.Count == 0 ? null : string.Join(' ', args);
         SearchResultsList.ItemsSource = _searchResults;
@@ -340,19 +353,19 @@ public sealed partial class MainWindow : Window
 
     private async Task MoveNextAsync(CancellationToken cancellationToken)
     {
-        if (_queue.Count > 0)
+        if (HasExplicitQueuedNextTrack())
         {
             await MoveQueueAsync(1, wrap: true, cancellationToken);
             return;
         }
 
-        if (_autoplay && _currentTrackIsAutoplay)
+        if (_autoplay && _currentTrack is not null)
         {
             await BeginNextAutoplayTrackAsync(cancellationToken);
             return;
         }
 
-        SetStatus("The queue is empty.");
+        SetStatus(_queue.Count == 0 ? "The queue is empty." : "End of queue.");
     }
 
     private async Task MovePreviousAsync(CancellationToken cancellationToken)
@@ -1018,13 +1031,17 @@ public sealed partial class MainWindow : Window
 
     private async void OnPositionReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_updatingPlaybackControls || _mpv is null)
+        if (_updatingPlaybackControls || !_positionSliderDragging || _mpv is null)
         {
             return;
         }
 
+        _positionSliderDragging = false;
         await RunActionAsync(() => _mpv.SeekToAsync(PositionSlider.Value, _lifetime.Token));
     }
+
+    private void OnPositionPressed(object? sender, PointerPressedEventArgs e) =>
+        _positionSliderDragging = true;
 
     private async void OnVolumeChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
@@ -1142,6 +1159,87 @@ public sealed partial class MainWindow : Window
 
         SetStatus("Uninstalling after the player closes...");
         Close();
+    }
+
+    private async void OnUpdateToolsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        SetStatus("Updating playback tools...");
+        try
+        {
+            ProcessResult result;
+            if (OperatingSystem.IsWindows())
+            {
+                var script = Path.Combine(AppContext.BaseDirectory, "update-tools.ps1");
+                var powershell = ToolLocator.Find("powershell.exe", null, "LIGHTYTP_POWERSHELL")
+                    ?? ToolLocator.Find("pwsh.exe", null, "LIGHTYTP_POWERSHELL");
+                if (powershell is null || !File.Exists(script))
+                {
+                    SetStatus("Tool updater is unavailable; reinstall the GUI package.");
+                    return;
+                }
+
+                result = await new ProcessRunner().RunAsync(
+                    powershell,
+                    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
+                     "-ToolsDirectory", Path.Combine(AppContext.BaseDirectory, "tools"), "-Force"],
+                    AppContext.BaseDirectory,
+                    null,
+                    TimeSpan.FromMinutes(5),
+                    _lifetime.Token);
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                var brew = ToolLocator.Find("brew", null, "LIGHTYTP_BREW");
+                if (brew is null)
+                {
+                    SetStatus("Homebrew is required. Install it, then retry.");
+                    return;
+                }
+
+                result = await new ProcessRunner().RunAsync(
+                    brew,
+                    ["upgrade", "yt-dlp", "mpv", "deno"],
+                    Path.GetDirectoryName(brew),
+                    null,
+                    TimeSpan.FromMinutes(10),
+                    _lifetime.Token);
+            }
+            else
+            {
+                SetStatus("Update yt-dlp, mpv, and Deno with your Linux package manager.");
+                return;
+            }
+
+            SetStatus(result.ExitCode == 0
+                ? "Playback tools updated."
+                : $"Tool update failed ({result.ExitCode}).");
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException)
+        {
+            SetStatus($"Tool update failed: {exception.Message}");
+        }
+    }
+
+    private void OnUpgradeClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = AppUpgradeService.ReleasesUrl,
+                UseShellExecute = true
+            });
+            SetStatus("Opened the latest release page.");
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            SetStatus($"Could not open the release page: {exception.Message}");
+        }
     }
 
     private void SetStatus(string message) => StatusText.Text = message;
