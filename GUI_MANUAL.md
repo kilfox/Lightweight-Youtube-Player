@@ -64,6 +64,8 @@ lightytp-gui "https://www.youtube.com/watch?v=..."
 - Click **AUTOPLAY ON/OFF** to enable or disable autoplay radio.
 - Drag the timeline to seek.
 - Use the volume slider to change volume.
+- Click **UPDATE TOOLS** to refresh yt-dlp, mpv, and Deno for the current platform.
+- Click **UPGRADE APP** to open the latest GUI release page.
 - Click the heart button to add or remove the current track from favorites.
 - Double-click list entries to play them.
 

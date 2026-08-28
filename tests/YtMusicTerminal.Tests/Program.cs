@@ -428,6 +428,42 @@ internal static class Program
         {
             throw new InvalidOperationException("No discrete playback snapshot notification was raised.");
         }
+
+        var keyResponse = await mpv.SendCommandAsync(["get_property", "input-key-list"], timeout.Token);
+        var supportedKeys = keyResponse.GetProperty("data").EnumerateArray()
+            .Select(key => key.GetString()).ToHashSet(StringComparer.Ordinal);
+        foreach (var key in new[] { "PLAY", "PAUSE", "PLAYPAUSE", "PLAYONLY", "PAUSEONLY", "XF86_PAUSE" })
+        {
+            if (!supportedKeys.Contains(key))
+            {
+                continue;
+            }
+
+            var isToggle = key is "PLAY" or "PAUSE" or "PLAYPAUSE" or "XF86_PAUSE";
+            var isPlayOnly = key == "PLAYONLY";
+            var expectedPause = isToggle || isPlayOnly;
+            await mpv.SendCommandAsync(["set_property", "pause", expectedPause], timeout.Token);
+            for (var press = 0; press < 3; press++)
+            {
+                expectedPause = isToggle ? !expectedPause : !isPlayOnly;
+                await mpv.SendCommandAsync(["keypress", key], timeout.Token);
+                // A keypress command queues the binding; wait for it to run before checking state.
+                using var keyTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                while (true)
+                {
+                    var response = await mpv.SendCommandAsync(["get_property", "pause"], timeout.Token);
+                    if (response.GetProperty("data").GetBoolean() == expectedPause)
+                    {
+                        break;
+                    }
+                    if (keyTimeout.IsCancellationRequested)
+                    {
+                        throw new InvalidOperationException($"Media key {key}, press {press + 1}: expected pause={expectedPause}.");
+                    }
+                    await Task.Delay(20, timeout.Token);
+                }
+            }
+        }
     }
 
     private static async Task LibraryStoreAsync()
