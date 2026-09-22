@@ -934,14 +934,25 @@ public sealed class PlayerApplication : IAsyncDisposable
                 seed,
                 excluded,
                 cancellationToken).ConfigureAwait(false);
-            var track = related.FirstOrDefault();
-            if (track is null)
+            foreach (var track in related)
             {
-                return null;
+                try
+                {
+                    var url = await _youtube
+                        .ResolveAudioUrlAsync(track, cancellationToken)
+                        .ConfigureAwait(false);
+                    return new AutoplayCandidate(track, url);
+                }
+                catch (Exception exception) when (exception is IOException
+                                                  or InvalidOperationException
+                                                  or TimeoutException)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"Autoplay candidate could not be resolved: {exception.Message}");
+                }
             }
 
-            var url = await _youtube.ResolveAudioUrlAsync(track, cancellationToken).ConfigureAwait(false);
-            return new AutoplayCandidate(track, url);
+            return null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
