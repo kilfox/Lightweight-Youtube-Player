@@ -131,6 +131,9 @@ internal static class Program
         state.ShowHelp = true;
         frame = new TerminalFrameRenderer().Render(state, 70, 18);
         Contains(state.UpgradeNotice, frame);
+        Contains("Keyboard shortcuts", frame);
+        Contains("r repeat off/track/queue", frame);
+        Contains("Ctrl+Q quit anywhere", frame);
         return Task.CompletedTask;
     }
 

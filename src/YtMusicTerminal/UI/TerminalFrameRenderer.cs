@@ -24,6 +24,17 @@ public sealed class TerminalFrameRenderer
             return canvas.Build();
         }
 
+        var brandText = state.UpgradeNotice ?? "◆ LIGHTWEIGHT YOUTUBE PLAYER ◆  by KH!";
+        var brandX = Math.Max(0, (width - brandText.Length) / 2);
+        canvas.Write(brandX, 0, brandText, width);
+        canvas.Style(brandX, 0, Math.Min(brandText.Length, width - brandX), Brand);
+
+        if (state.ShowHelp)
+        {
+            DrawHelp(canvas, width, height);
+            return canvas.Build();
+        }
+
         var playerY = height - 6;
         const int searchY = 1;
         const int mainY = 4;
@@ -32,11 +43,6 @@ public sealed class TerminalFrameRenderer
         var rightWidth = width - leftWidth;
         var queueHeight = Math.Max(5, mainHeight / 2);
         var historyHeight = mainHeight - queueHeight;
-
-        var brandText = state.UpgradeNotice ?? "◆ LIGHTWEIGHT YOUTUBE PLAYER ◆  by KH!";
-        var brandX = Math.Max(0, (width - brandText.Length) / 2);
-        canvas.Write(brandX, 0, brandText, width);
-        canvas.Style(brandX, 0, Math.Min(brandText.Length, width - brandX), Brand);
 
         canvas.Box(0, searchY, width, 3, PaneTitle("Search  [/ to focus]", state.Focus == FocusPane.Search));
         var searchText = state.SearchText.Length == 0 ? "Search YouTube Music..." : state.SearchText;
@@ -119,13 +125,39 @@ public sealed class TerminalFrameRenderer
         DrawPlayer(canvas, state, playerY, width);
 
         var busy = state.IsSearching ? "Searching...  " : state.IsResolving ? "Loading track...  " : string.Empty;
-        var help = state.ShowHelp
-            ? "Esc player | Up/Down volume | Enter play | Space pause | y autoplay | Ctrl+Q quit"
-            : "? help  |  Ctrl+Q quit  |  " + busy + state.StatusMessage;
+        var help = "? help  |  Ctrl+Q quit  |  " + busy + state.StatusMessage;
         canvas.Write(0, height - 1, help, width);
         canvas.Style(0, height - 1, width, Dim);
 
         return canvas.Build();
+    }
+
+    private static void DrawHelp(Canvas canvas, int width, int height)
+    {
+        canvas.Box(0, 2, width, height - 3, "Keyboard shortcuts");
+        string[] lines =
+        [
+            "/ search                 Esc player controls",
+            "Tab next pane            Shift+Tab previous pane",
+            "Up/Down select item      Up/Down volume in player",
+            "Enter search or play      Space play/pause",
+            "Left/Right seek 5s        +/- volume",
+            "a add to queue            Delete remove queue item",
+            "m load 10 more            n/p next/previous",
+            "x shuffle                 r repeat off/track/queue",
+            "y autoplay radio          c or F5 resume last track",
+            "f favorite                h history",
+            "v favorites               s stop playback",
+            "q quit outside search     Ctrl+Q quit anywhere"
+        ];
+
+        for (var index = 0; index < lines.Length; index++)
+        {
+            canvas.Write(2, 3 + index, lines[index], width - 4);
+        }
+
+        canvas.Write(0, height - 1, "? or any key closes help  |  Ctrl+Q quits", width);
+        canvas.Style(0, height - 1, width, Dim);
     }
 
     private static void DrawTracks(

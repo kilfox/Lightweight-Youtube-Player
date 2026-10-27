@@ -56,6 +56,7 @@ public sealed partial class MainWindow : Window
     private int _searchLimit = SearchBatchSize;
     private bool _updatingPlaybackControls;
     private bool _positionSliderDragging;
+    private bool _shortcutHelpVisible;
     private bool _isClosing;
     private bool _closeCompleted;
 
@@ -84,6 +85,7 @@ public sealed partial class MainWindow : Window
         QueueList.ItemsSource = _queue;
         HistoryList.ItemsSource = _history;
         FavoritesList.ItemsSource = _favorites;
+        UpdateShortcutText();
 
         _playbackTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, OnPlaybackTick);
         Opened += OnOpened;
@@ -415,8 +417,57 @@ public sealed partial class MainWindow : Window
         _ = RunActionAsync(() => SaveStateAsync(_lifetime.Token));
     }
 
+    private void CycleRepeatMode()
+    {
+        _repeat = _repeat switch
+        {
+            RepeatMode.Off => RepeatMode.Track,
+            RepeatMode.Track => RepeatMode.Queue,
+            _ => RepeatMode.Off
+        };
+
+        BeginPrefetchNextTrack();
+        SetStatus($"Repeat {_repeat.ToString().ToLowerInvariant()}.");
+        _ = RunActionAsync(() => SaveStateAsync(_lifetime.Token));
+    }
+
     private void UpdateAutoplayButton() =>
         AutoplayButton.Content = _autoplay ? "AUTOPLAY ON" : "AUTOPLAY OFF";
+
+    private static bool IsPrimaryShortcut(KeyModifiers modifiers) =>
+        OperatingSystem.IsMacOS()
+            ? modifiers.HasFlag(KeyModifiers.Meta)
+            : modifiers.HasFlag(KeyModifiers.Control);
+
+    private static string PrimaryShortcutLabel => OperatingSystem.IsMacOS() ? "⌘" : "CTRL";
+
+    private void UpdateShortcutText()
+    {
+        FooterShortcutHint.Text =
+            $"F1 SHORTCUTS  •  N NEXT  •  R REPEAT  •  Y AUTOPLAY  •  {PrimaryShortcutLabel}+F SEARCH  •  {PrimaryShortcutLabel}+Q QUIT";
+        ShortcutHelpText.Text = $"""
+{PrimaryShortcutLabel}+F    Focus search
+F1          Open shortcut helper
+ESC         Close shortcut helper
+ENTER       Search while the search field is focused
+
+SPACE       Play or pause
+LEFT/RIGHT  Seek backward or forward five seconds
+UP/DOWN     Raise or lower volume by five percent
+N / P       Next or previous queued track, or navigate radio
+S           Stop playback
+R           Cycle repeat: off, track, queue
+Y           Toggle autoplay radio
+
+{PrimaryShortcutLabel}+Q    Quit and stop the background player
+""";
+    }
+
+    private void SetShortcutHelpVisible(bool visible)
+    {
+        _shortcutHelpVisible = visible;
+        ShortcutHelpOverlay.IsVisible = visible;
+    }
 
     private async Task AdvanceAfterPlaybackAsync()
     {
@@ -1036,6 +1087,10 @@ public sealed partial class MainWindow : Window
 
     private void OnAutoplayClick(object? sender, RoutedEventArgs e) => ToggleAutoplay();
 
+    private void OnShortcutHelpClick(object? sender, RoutedEventArgs e) => SetShortcutHelpVisible(true);
+
+    private void OnShortcutHelpCloseClick(object? sender, RoutedEventArgs e) => SetShortcutHelpVisible(false);
+
     private void OnToggleFavoriteClick(object? sender, RoutedEventArgs e) => ToggleFavorite(_currentTrack);
 
     private async void OnPositionReleased(object? sender, PointerReleasedEventArgs e)
@@ -1064,14 +1119,28 @@ public sealed partial class MainWindow : Window
 
     private async void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.Q)
+        if (e.Key == Key.F1)
+        {
+            e.Handled = true;
+            SetShortcutHelpVisible(true);
+            return;
+        }
+
+        if (_shortcutHelpVisible && e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            SetShortcutHelpVisible(false);
+            return;
+        }
+
+        if (IsPrimaryShortcut(e.KeyModifiers) && e.Key == Key.Q)
         {
             e.Handled = true;
             Close();
             return;
         }
 
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.F)
+        if (IsPrimaryShortcut(e.KeyModifiers) && e.Key == Key.F)
         {
             e.Handled = true;
             LibraryTabs.SelectedIndex = 0;
@@ -1117,6 +1186,10 @@ public sealed partial class MainWindow : Window
             case Key.S when _mpv is not null:
                 e.Handled = true;
                 await RunActionAsync(() => StopPlaybackAsync(_lifetime.Token));
+                break;
+            case Key.R:
+                e.Handled = true;
+                CycleRepeatMode();
                 break;
             case Key.Y:
                 e.Handled = true;
