@@ -211,13 +211,27 @@
         <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="2,4,2,0">
           <TextBlock x:Name="StatusText" Grid.Column="0" Text="Starting..." Foreground="#879874" FontSize="11" TextTrimming="CharacterEllipsis" />
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+            <Button Classes="uninstall" Content="F1 SHORTCUTS" ToolTip.Tip="Show keyboard shortcuts" Click="OnShortcutHelpClick" />
             <Button Classes="uninstall" Content="UPDATE TOOLS" ToolTip.Tip="Update yt-dlp, mpv, and Deno" Click="OnUpdateToolsClick" />
             <Button Classes="uninstall" Content="UPGRADE APP" ToolTip.Tip="Open the latest LightYTP release" Click="OnUpgradeClick" />
             <Button Classes="uninstall" Content="UNINSTALL" ToolTip.Tip="Remove LightYTP GUI" Click="OnUninstallClick" />
           </StackPanel>
-          <TextBlock Grid.Column="2" Text="CTRL+F SEARCH  •  SPACE PLAY/PAUSE  •  CTRL+Q QUIT" Foreground="#596650" FontSize="10" VerticalAlignment="Center" />
+          <TextBlock x:Name="FooterShortcutHint" Grid.Column="2" Foreground="#596650" FontSize="10" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
         </Grid>
       </Grid>
+
+      <Border x:Name="ShortcutHelpOverlay" Grid.Row="2" Margin="8,0,8,8" Padding="14" Background="#EE11140F" BorderBrush="#A9E64A" BorderThickness="1" IsVisible="False">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,9">
+            <TextBlock Text="KEYBOARD SHORTCUTS" Foreground="#A9E64A" FontSize="14" FontWeight="Bold" />
+            <Button Grid.Column="1" Classes="uninstall" Content="ESC CLOSE" ToolTip.Tip="Close shortcut help" Click="OnShortcutHelpCloseClick" />
+          </Grid>
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <TextBlock x:Name="ShortcutHelpText" Foreground="#D7E7B5" FontSize="11" LineHeight="18" TextWrapping="Wrap" />
+          </ScrollViewer>
+          <TextBlock Grid.Row="2" Margin="0,9,0,0" Text="F1 OR ESC CLOSES THIS HELPER" Foreground="#718064" FontSize="10" />
+        </Grid>
+      </Border>
     </Grid>
   </Border>
 </Window>
